@@ -1,0 +1,735 @@
+---
+title: "Group 1 Project - Ritcher"
+format: html
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 12,
+  fig.height = 12
+)
+```
+
+# Phase 1: Data Wrangling
+
+First stage is to download our various csv files and perform a join to create one master dataframe. We must match by building_id.
+
+```{r}
+#Loading all needed packages
+library(tidyverse)
+library(DT)
+library(patchwork)
+library(tidyverse)
+library(tidymodels)
+library(patchwork)
+library(DT)
+```
+
+## Joining the two data sources
+
+```{r}
+# Read in the two data sources
+train_labels <- readr::read_csv("train_labels.csv")
+train_values <- readr::read_csv("train_values.csv")
+
+#Use Dplyr's left_join to join train_labels and train_values on building_id
+raw_data <- left_join(train_values, train_labels, by= "building_id")
+```
+
+We now have a raw data set that contains building values AND their associated damage grade. I also took the opportunity to save this raw data file as a CSV just in case. Note that the code to save to csv was not saved in this code to prevent my computer's copy from potentially corrupting.
+
+## Fixing Variable Types
+
+While joining my data, I noticed that the csv read in a lot of integer values as double. This will be a problem for when I am trying to run analysis. I would also need to make sure that each categorical variable is as a factor.
+
+```{r}
+glimpse(raw_data)
+```
+
+Almost all of my data is in dbl format, not int. If it's not in double format, it is in character format. It should be as factor. Let's start by mutating the columns we need into integers. We will create a new dataframe called "data_cleaned" where all future transformations will occur on it.
+
+```{r}
+data_cleaned <- raw_data %>%
+  mutate(
+    across(
+      c(
+        count_floors_pre_eq,
+        age,
+        area_percentage,
+        height_percentage,
+        damage_grade,
+        count_families
+      ),
+      as.integer
+    )
+  )
+
+data_cleaned <- data_cleaned %>%
+  mutate(
+    across(
+      c(
+        geo_level_1_id, 
+        geo_level_2_id,
+        geo_level_3_id
+      ),
+      as.character
+    )
+  )
+
+```
+
+Looking at the project's data dictionary, we have the rest of the data as binary and/or categorical variables of multiple levels. We will need to make sure both are converted to factors. Putting them all in a list just in case we need to change factors or binary types later on. This is a first pass.
+
+```{r}
+#Parse out da data into the last two types, categorical and binary
+
+# Categorical variables (multiple levels)
+cat_vars <- c(
+  "land_surface_condition",
+  "foundation_type",
+  "roof_type",
+  "ground_floor_type",
+  "other_floor_type",
+  "position",
+  "plan_configuration",
+  "damage_grade",
+  "legal_ownership_status"
+)
+
+# Binary variables (0,1)
+binary_vars <- c(
+  "has_superstructure_adobe_mud",
+  "has_superstructure_mud_mortar_stone",
+  "has_superstructure_stone_flag",
+  "has_superstructure_cement_mortar_stone",
+  "has_superstructure_mud_mortar_brick",
+  "has_superstructure_cement_mortar_brick",
+  "has_superstructure_timber",
+  "has_superstructure_bamboo",
+  "has_superstructure_rc_non_engineered",
+  "has_superstructure_rc_engineered",
+  "has_superstructure_other",
+  "has_secondary_use",
+  "has_secondary_use_agriculture",
+  "has_secondary_use_hotel",
+  "has_secondary_use_rental",
+  "has_secondary_use_institution",
+  "has_secondary_use_school",
+  "has_secondary_use_industry",
+  "has_secondary_use_health_post",
+  "has_secondary_use_gov_office",
+  "has_secondary_use_use_police",
+  "has_secondary_use_other"
+)
+
+# Transform data types
+data_cleaned <- data_cleaned %>%
+  mutate(
+    
+    # Convert categorical columns to factors
+    across(all_of(cat_vars), as.factor),
+    # Convert binary columns to factors (Make sure to keep 0 and 1)
+    across(all_of(binary_vars), as.factor))
+```
+
+## Finding and Dealing with NAs
+
+Doing a quick skim of the data on the data viewer, I didn't see any NAs or values that would indicate NAs, but let's double check that with code.
+
+```{r}
+colSums(is.na(data_cleaned))
+```
+
+We confirmed that there are no NAs. I also want to quickly check for duplicates.
+
+```{r}
+# Duplicate rows
+data_cleaned %>%
+  duplicated() %>%
+  sum()
+```
+
+We have no NAs and no duplicates.
+
+## Dropping Unnecessary Columns
+
+It was immediately determined that building_id will be dropped from the table due to the fact it is just an identifier for each row in the data.
+
+```{r}
+# Drop building_id from raw data, as it's just an identifier
+data_cleaned <- data_cleaned %>%
+  select(-building_id)
+```
+
+## Summary of Initial Data Wrangling
+
+We uploaded the two CSV files, performed a left join and saved the new joined data into a dataframe and csv file. We then made sure that the joined data, then called 'raw_data', had all the variables in the correct format and we checked for NAs. There were no NAs. The current main dataframe we will be using is called "**data_cleaned**".
+
+# Phase 2: EDA
+
+Once we have our data into a cleaner place, we can start with performing EDA to get a better feel for the overall data. I think the best way to cut through nearly 40 columns is by splitting our work into different parts.
+
+## `damage_grade` Investigation
+
+We know that `damage_grade` will be the response variable of interest. So let's take a look at the class distribution of the 3 damage types.
+
+```{r}
+# Plot target distribution
+ggplot(data_cleaned, aes(damage_grade, fill = damage_grade)) +
+  geom_bar() +
+  labs(
+    title = "Distribution of Damage Grade",
+    x = "Damage Grade",
+    y = "Count"
+  ) +
+    scale_fill_manual(
+            values = c(
+              "1" = "skyblue",
+              "2" = "darkgoldenrod1",
+              "3" = "red1"
+            )
+          )
+```
+
+So here we see we have some class imbalance here. The damage grade of 2 is the most common damage grade, making just under 150,000 records. Then it was followed by damage level 3 and then damage level 1 trailing far behind. Class imbalance could cause some issues for models in the future.
+
+## Numerical Variable Data Exploration
+
+Let's start by first looking at our purely numerical data. Let's only save the numerical columns to a subset and then generate some summary statistics.
+
+```{r}
+#Using our int transformation list as a basis, but we do not need building_id, any of the geo_lists, or building_damage.
+
+int_subset <- c(
+  "age",
+  "count_floors_pre_eq",
+  "area_percentage",
+  "height_percentage",
+  "count_families"
+)
+
+```
+
+Now we can generate the summary stats
+
+```{r}
+data_cleaned %>%
+  select(all_of(int_subset)) %>%
+  summary()
+```
+
+We see some evidence of skew and outliers in this dataset, let's further explore with some histograms.
+
+### Numerical Data Histograms
+
+```{r}
+data_cleaned %>%
+  select(all_of(int_subset)) %>%
+  pivot_longer(everything(),
+               names_to = "variable",
+               values_to = "value") %>%
+  ggplot(aes(value)) +
+  geom_histogram(bins = 40, 
+                 fill = "purple",
+                 color = "white") +
+  facet_wrap(~variable, scales = "free") +
+  theme_minimal()
+
+```
+
+### Numerical Data Boxplots
+
+To further investigate our numerical data, I applied a boxplot to three of the variables, `age` `area_percentage`, and `height_percentage`. The count variables were excluded from this analysis due to the variables having relatively few distinct values, making the boxplots illegible.
+
+```{r}
+
+#Noted some wild outliers so let's look at boxplot. Not bothering with select(all_of)
+
+age_boxplot <- ggplot(data_cleaned, aes(x = age)) +
+  geom_boxplot(fill = "purple", color = "black") +
+  theme_minimal() +
+  labs(
+    title = "Boxplot of Age",
+    x = "Age"
+  )
+
+area_boxplot <- ggplot(data_cleaned, aes(x = area_percentage)) +
+  geom_boxplot(fill = "purple", color = "black") +
+  theme_minimal() +
+  labs(
+    title = "Boxplot of Area Percentage",
+    x = "Area Percentage"
+  )
+
+height_boxplot <- ggplot(data_cleaned, aes(x = height_percentage)) +
+  geom_boxplot(fill = "purple", color = "black") +
+  theme_minimal() +
+  labs(
+    title = "Boxplot of Height Percentage",
+    x = "Height Percentage"
+  )
+
+  (age_boxplot / area_boxplot / height_boxplot) +
+  plot_annotation(
+    title = "Boxplots of Some Numeric Variables"
+  )
+```
+
+Here is a brief summary of what I found:
+
+`age` - Age skews very young in the dataset. The data is extremely right-skewed, meaning that most buildings in Nepal are only a few years old. There are very few buildings that are older. It can be hard to see in this graph, but there are a few buildings that are "995" years old. Is that correct? Usually an entry code of 999 would indicate an NA value, but 995 could be a realistic age of building in Nepal. After some brief googling, there are some buildings in Nepal that come from 17 CE, or even older. https://www.blackgate.com/2015/04/29/remembering-nepals-ancient-cultural-heritage/. Average age is 26 years, while the median is 16. My suggestion is to remove the extrme outliers from the data and log transform the rest.
+
+`area_percentage` - This is the normalized area of the building's footprint. Appropriately, this data seems to be already transformed to be roughly normal to very moderately right-skewed. Most values are less than 100 units (probably meters). Mean is 8.018 with median being slightly lower at 7. I reccomend log transform.
+
+`count_families` - This is a distinct variables that counts the amount of families that lived in the building. Most of these values hover at around 1 to 2 families in a building, with some buildings being unoccupied by families (note zero values). There are some buildings that hold more families, but these are likely outliers. They don't even show up on the histogram. Mean and median are roughly equal with a mean of 0.9839 and a median of 1.
+
+`count_floors_pre_eq` - This variable is the floor count in the building before the building. We can see that the majority of structures pre-earthquake were two stories. This has a rough normal curve, but structures greater than 3 stories are relatively rare. Mean and median are roughly the same with a median of 2.00 and a mean of 2.13.
+
+`height_percentage` - Here we see the normalized height of a building's footprint. We can clearly see that the normalization worked, as the histogram is roughly in a normal with a moderate skew. The mean is roughly 5.424 while the median is 5. I reccomend log transform.
+
+We also see that all of these variables have some level of outliers. The worst case is age, as mentioend before. We have some structures that appear to be almost a millenium old! For the most extreme outliers, I would suggest removing them.
+
+### Numerical Data Correlation Matrix
+
+We see how each numerical variable interacts with one another in isolation, but how do they act together?
+
+```{r}
+corr_df <- data_cleaned %>%
+  select(all_of(int_subset))
+
+#Make a heatmap!
+GGally::ggcorr(
+  corr_df,
+  label = TRUE,
+  label_round = 2
+)
+```
+
+As we can clearly see, we have relatively LOW correlation between each numerical variable except one pair. `count_floors_pre_eq` and `height_percentage` are highly positively correlated. When we start our modeling, we may need to drop one of these columns for another.
+
+### Numerical Values and `damage_grade`
+
+```{r}
+data_cleaned %>%
+  pivot_longer(
+    cols = all_of(int_subset),
+    names_to = "variable",
+    values_to = "value"
+  ) %>%
+  ggplot(aes(damage_grade, value, fill = damage_grade)) +
+  geom_boxplot() +
+  scale_fill_manual(
+            values = c(
+              "1" = "skyblue",
+              "2" = "darkgoldenrod1",
+              "3" = "red1"
+            )
+          ) +
+  facet_wrap(~variable, scales = "free") +
+  theme(legend.position = "none") +
+  labs(
+    title = "Numeric Variables vs Damage Grade"
+  )
+```
+
+Okay so when we parse out the numerical data across damage grades, we see that `area_percentage`, `count_families`, and `age` so not differ radically from one another. However, we do see differences in `count_floors_pre_eq` and `height_percentage`. Knowing that these two were highly correlated with one another, this makes sense. It appears that the overall height of the building matters when predicting its level of destruction in the earthquake. This could be an important predictor!
+
+## Categorical Variable Data Exploration
+
+We now move onto looking at the categorical and binary variables found within this dataset. I want to not only look at their distribution, but also see how it parses out with the damage grades.
+
+```{r}
+#proportion by damage_grade
+cat_plot_grid <-
+  wrap_plots(
+    # go through every variable (var) found in cat_vars (doesn't include binary vars)
+    lapply(cat_vars, function(var) {
+      ggplot(
+        data_cleaned,
+        aes_string(x = var, fill = "damage_grade") #Remember fill is needed for proportion bar charts
+      ) +
+        geom_bar(
+          position = "fill", 
+          color = "white",
+          linewidth = 0.2
+        ) +
+          scale_fill_manual(
+            values = c(
+              "1" = "skyblue",
+              "2" = "darkgoldenrod1",
+              "3" = "red1"
+            )
+          ) +
+
+        scale_y_continuous(
+          labels = scales::percent_format()
+        ) +
+
+        labs(
+          title = var,
+          x = NULL,
+          y = "Proportion"
+        ) +
+
+        theme_minimal(base_size = 10) + #No chartjunk - Tufte's book. 
+
+        theme(
+          plot.title = element_text(
+            face = "bold",
+            size = 10,
+            hjust = 0.5
+          ),
+          # Fix up the x-axis labels within each grid cell
+          axis.text.x = element_text(
+            angle = 45,
+            hjust = 1,
+            size = 10
+          ),
+          # Fix up our y axis labels and our legend
+          axis.text.y = element_text(size = 7),
+
+          legend.position = "bottom",
+
+          legend.title = element_blank(),
+
+          panel.grid.minor = element_blank()
+        )
+
+    }),
+
+    ncol = 3,
+    guides = "collect"
+
+  ) +
+
+  plot_annotation(
+    title = "Categorical Variables vs Damage Grade",
+    theme = theme(
+      plot.title = element_text(
+        size = 16,
+        face = "bold",
+        hjust = 0.5
+      )
+    )
+  )
+
+# Display patchwork grid
+cat_plot_grid
+```
+
+And now we interpret one-at-a-time per variable.
+
+`land_surface_condition` - While damage grade 2 seems to dominate all three surface conditions, it appears that the proportions are relatively similar for each condition type. Condition type 'o' seems to have a higher proportion of major damage, while condition 't' shares slightly higher damage level 1. However, the patterns look shockingly similar.
+
+`foundation_type` - Foundation type really seems to matter here. It appears that foundation type 'l' seems to disproportionally have little damage levels (damage level 1) compared to the other foundation types. Meanwhile, foundation type 'r' seems to show the most damage, having a high proportion of 3 values and low proportion of 1 values. This looks like an important variable.
+
+`roof_type` - Roof type also shows quite a bit of differences. For example, roof type 'x' seems to have quite a bit of resilence, with a lot of 1 and 2 values for damage. Meanwhile, the other two roof types show similar proportions.
+
+`ground_floor_type` - We see another bit of variation among ground floor types. Ground floor type 'v' shows less descrution compared to the others, while floor type 'f' and "x" see a lot more. This is probably an important variable.
+
+`other_floor_type` - We see more varation between other floor types, with floor type 's' having a higher proportion of low damage compared to the other floor types. Meanwhile, floor type 'q' seems to have a higher proportion of high to medium damage. Another important variable.
+
+`position` - Position seems to have somewhat similar proportions of damage between position type. Perhaps a moderately important variable.
+
+`plan_configuration` - Plan configuration sees some varation. It's not as extreme as foundation type or roof type, but variation is most noticable with the low damage grades and highest damage grades.
+
+`legal_ownership_status` - Legal ownership status DOES see some differences among the groups. Namely that ownership type 'a' saw the highest proportion of level 1 damage while ownership tyoe 'w' saw the least. This could be another important variable.
+
+## Binary Variable Data Exploration
+
+# This section compares the binary variables for superstructure and secondary use
+
+# I used Brian's material that he emailed to the team to group the superstructure variables into broader building categories, then checked if those groups seem reasonable based on damage grade.
+
+```{r}
+# Make damage_grade a factor
+data_cleaned <- data_cleaned %>%
+  mutate(damage_grade = factor(damage_grade))
+
+# Get the binary variable groups
+superstructure_vars <- binary_vars[str_detect(binary_vars, "has_superstructure")]
+secondary_use_vars <- binary_vars[str_detect(binary_vars, "has_secondary_use")]
+```
+
+```{r}
+# 1st I look at each superstructure variable by itself - helps show which building materials had mucho or less severe damage
+
+superstructure_summary <- data_cleaned %>%
+  select(damage_grade, all_of(superstructure_vars)) %>%
+  pivot_longer(
+    cols = all_of(superstructure_vars),
+    names_to = "variable",
+    values_to = "present"
+  ) %>%
+  filter(present == 1) %>%
+  count(variable, damage_grade) %>%
+  group_by(variable) %>%
+  mutate(prop = n / sum(n)) %>%
+  ungroup()
+
+ggplot(superstructure_summary,
+       aes(x = variable, y = prop, fill = damage_grade)) +
+  geom_col(color = "white") +
+  scale_fill_manual(
+    values = c(
+      "1" = "skyblue",
+      "2" = "darkgoldenrod1",
+      "3" = "red1"
+    )
+  ) +
+  scale_y_continuous(labels = scales::percent_format()) +
+labs(
+  title = "Damage Levels for Different Building Materials",
+  x = "Building Material",
+  y = "Percent of Buildings",
+  fill = "Damage Grade"
+) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Here we can learly see that each building material contain different proportions for building damage type. Some, such as stone buildings, contain a much higher proportion of damage level 3 damage than others. RC_Engineered buildings seem to have the least amount of damage. However, trying to keep track of every binary building material type is difficult, causing some issues for interpretation later. In addition, it is hard to distinguish between variables that have similar, yet still different, structures.
+
+We thought it would be wise to group materials that have similar materials together. For example, structures made of bamboo or timber can be condensed into a variable called "super_flexible_wood". As we can see in the plot "Damage Levels for Different Building Materials", both bamboo and timber, materials made from woody plants, have similar distributions of damage type. Following this logic, we tried grouping variables based on shared structural similarities. The work done to do this is found below.
+
+```{r}
+# Next I create Brian's proposed superstructure groups - not replacing the original variables....this just helps me test me the larger construction groups make sense
+
+data_cleaned <- data_cleaned %>%
+  mutate(
+    super_catch_all = if_else(has_superstructure_other == 1, 1, 0),
+
+    super_flexible_wood = if_else(
+      has_superstructure_bamboo == 1 |
+        has_superstructure_timber == 1,
+      1, 0
+    ),
+
+    super_modern_concrete = if_else(
+      has_superstructure_rc_engineered == 1 |
+        has_superstructure_rc_non_engineered == 1,
+      1, 0
+    ),
+
+    super_modern_mortar = if_else(
+      has_superstructure_cement_mortar_brick == 1 |
+        has_superstructure_cement_mortar_stone == 1,
+      1, 0
+    ),
+
+    super_stone = if_else(has_superstructure_stone_flag == 1, 1, 0),
+
+    super_traditional_mortar = if_else(
+      has_superstructure_adobe_mud == 1 |
+        has_superstructure_mud_mortar_brick == 1 |
+        has_superstructure_mud_mortar_stone == 1,
+      1, 0
+    )
+  )
+```
+
+```{r}
+# This graph focuses on the variables that Brian proposed grouping together and shows that traditional mortar variables look fairly similar, while engineered and non-engineered concrete are not exactly the same
+
+focused_super_vars <- c(
+  "has_superstructure_adobe_mud",
+  "has_superstructure_mud_mortar_brick",
+  "has_superstructure_mud_mortar_stone",
+  "has_superstructure_cement_mortar_brick",
+  "has_superstructure_cement_mortar_stone",
+  "has_superstructure_rc_engineered",
+  "has_superstructure_rc_non_engineered"
+)
+
+focused_super_summary <- data_cleaned %>%
+  select(damage_grade, all_of(focused_super_vars)) %>%
+  pivot_longer(
+    cols = all_of(focused_super_vars),
+    names_to = "variable",
+    values_to = "present"
+  ) %>%
+  filter(present == 1) %>%
+  count(variable, damage_grade) %>%
+  group_by(variable) %>%
+  mutate(prop = n / sum(n)) %>%
+  ungroup()
+
+ggplot(focused_super_summary,
+       aes(x = variable, y = prop, fill = damage_grade)) +
+  geom_col(color = "white") +
+  scale_fill_manual(
+    values = c(
+      "1" = "skyblue",
+      "2" = "darkgoldenrod1",
+      "3" = "red1"
+    )
+  ) +
+  scale_y_continuous(labels = scales::percent_format()) +
+labs(
+  title = "Comparing Similar Building Materials",
+  x = "Building Material",
+  y = "Percent of Buildings",
+  fill = "Damage Grade"
+) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+# Plot detailed secondary use variables only, I am leaving out has_secondary_use because it is the broad master flag
+
+secondary_summary <- data_cleaned %>%
+  select(damage_grade, all_of(setdiff(secondary_use_vars, "has_secondary_use"))) %>%
+  pivot_longer(
+    cols = -damage_grade,
+    names_to = "variable",
+    values_to = "present"
+  ) %>%
+  filter(present == 1) %>%
+  count(variable, damage_grade) %>%
+  group_by(variable) %>%
+  mutate(prop = n / sum(n)) %>%
+  ungroup()
+
+ggplot(secondary_summary,
+       aes(x = variable, y = prop, fill = damage_grade)) +
+  geom_col(color = "white") +
+  scale_fill_manual(
+    values = c(
+      "1" = "skyblue",
+      "2" = "darkgoldenrod1",
+      "3" = "red1"
+    )
+  ) +
+  scale_y_continuous(labels = scales::percent_format()) +
+labs(
+  title = "Damage Grade by Secondary Use",
+  x = "Secondary Use",
+  y = "Percent of Buildings",
+  fill = "Damage Grade"
+) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+# Compare Brian's broader superstructure groups, ranking the groups by how much severe damage they had
+
+super_group_vars <- c(
+  "super_catch_all",
+  "super_flexible_wood",
+  "super_modern_concrete",
+  "super_modern_mortar",
+  "super_stone",
+  "super_traditional_mortar"
+)
+
+super_group_summary <- data_cleaned %>%
+  select(damage_grade, all_of(super_group_vars)) %>%
+  pivot_longer(
+    cols = all_of(super_group_vars),
+    names_to = "group",
+    values_to = "present"
+  ) %>%
+  filter(present == 1) %>%
+  count(group, damage_grade) %>%
+  group_by(group) %>%
+  mutate(prop = n / sum(n)) %>%
+  ungroup()
+
+ggplot(super_group_summary,
+       aes(x = group, y = prop, fill = damage_grade)) +
+  geom_col(color = "white") +
+  scale_fill_manual(
+    values = c(
+      "1" = "skyblue",
+      "2" = "darkgoldenrod1",
+      "3" = "red1"
+    )
+  ) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(
+    title = "Damage Grade Mix by Brian's Superstructure Groups",
+    x = "Superstructure Group",
+    y = "Percent of Buildings",
+    fill = "Damage Grade"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+# table to help write the EDA section, this ranks the superstructure groups by the % of severe damage
+
+super_group_summary %>%
+  filter(damage_grade == 3) %>%
+  arrange(desc(prop))
+```
+
+The findings are as follows:
+
+Stone buildings had the highest share of severe damage - almost half were damage grade 3
+
+Traditional mortar buildings also performed poorly, with over one-third severely damaged
+
+Wood buildings were in the middle
+
+Modern concrete buildings had much lower severe damage rates and modern mortar buildings had the lowest severe damage rate
+
+The table shows that building material is strongly related to earthquake damage. Stone and traditional mortar structures had the highest percentage of severe damage, while modern concrete and modern mortar structures had the lowest. This suggests that newer construction materials may be more resistant to severe damage. The results also support Brian's grouping of traditional mortar materials because they appear to behave similarly and have relatively high rates of severe damage.
+
+# Converting to a Binary Classification Problem
+
+We've decided to restructure this into a binary classification problem which classifies whether or not there would be damage.
+
+- **damaged:** 0 for damage_grade=1 (minimal)
+
+- **damaged**: 1 for damage_grade=2,3 (moderate to high)
+
+Below we see the new distribution.
+
+```{r add new damaged indicator and plot distribution}
+data_cleaned <- data_cleaned |>
+ mutate(damaged = as.factor(if_else(damage_grade %in% c(2, 3), 1, 0)))
+
+
+data_cleaned <- data_cleaned %>%
+  select(-damage_grade)
+
+# Plot target distribution
+ggplot(data_cleaned, aes(damaged, fill = damaged)) +
+  geom_bar() +
+  labs(
+    title = "Distribution of Damaged",
+    x = "Damaged",
+    y = "Count"
+  ) +
+    scale_fill_manual(
+            values = c(
+              "0" = "skyblue",
+              "1" = "red1"
+            )
+          )
+
+
+```
+
+# Test and Train Split
+
+Our next steps are to split the data into an 80/20 test-train split, with strata for damaged. We want to make sure that each data set (test and train) have equal proportions of our damaged indicator
+
+```{r stratify split on damaged }
+set.seed(420) 
+data_split <- initial_split(data_cleaned, prop = 0.80, strata=damaged) 
+train <- training(data_split) 
+test <- testing(data_split)
+
+#Setting up our resamples for cross-val using training set
+resamples <- vfold_cv(train, v = 10, strata = damaged)
+```
+
+##
