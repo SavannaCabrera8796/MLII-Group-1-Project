@@ -729,7 +729,164 @@ train <- training(data_split)
 test <- testing(data_split)
 
 #Setting up our resamples for cross-val using training set
-resamples <- vfold_cv(train, v = 10, strata = damaged)
+resamples <- vfold_cv(train, v = 5, strata = damaged)
 ```
 
-##
+```{r}
+# groups geographic levels together before dummy encoding
+
+lasso_recipe <-
+  recipe(damaged ~ ., data = train) %>%
+  step_other(
+    geo_level_2_id,
+    geo_level_3_id,
+    threshold = 0.01
+  ) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_zv(all_predictors()) %>%
+  step_normalize(all_numeric_predictors())
+```
+
+```{r}
+# Check # of predictors after preprocessing
+# This allows us to verify that dummy encoding & grouping of rare
+# geographic levels did not create any large feature space
+
+prep(lasso_recipe) %>%
+  juice() %>%
+  dim()
+```
+
+```{r}
+# Create a grid of penalty values to check
+# The penalty controls how strongly LASSO shrinks coefficients toward 0
+# Larger penalties result in larger feature selection
+
+lasso_grid <-
+  grid_regular(
+    penalty(),
+    levels = 10
+  )
+```
+
+```{r}
+# My LASSO log reg model
+# We use mixture = 1 for L1 regularization, which can shrink
+# coefficients to 0 and do feature selection
+
+library(glmnet)
+
+lasso_spec <-
+  logistic_reg(
+    penalty = tune(),
+    mixture = 1
+  ) %>%
+  set_engine("glmnet")
+```
+
+```{r}
+# Combine the preprocessing recipe and model spec into a uno workflow.
+
+lasso_wf <-
+  workflow() %>%
+  add_recipe(lasso_recipe) %>%
+  add_model(lasso_spec)
+```
+
+```{r}
+# Make faster
+library(doParallel)
+
+cl <- makePSOCKcluster(parallel::detectCores() - 1)
+registerDoParallel(cl)
+```
+
+```{r}
+# Tune the penalty parameter using X val
+# I evaluate model perf across a bunch of penalty values
+# and select the value that max ROC AUC.
+
+set.seed(42)
+
+lasso_tuned <-
+  tune_grid(
+    lasso_wf,
+    resamples = resamples,
+    grid = lasso_grid,
+    metrics = metric_set(
+      roc_auc,
+      bal_accuracy
+    )
+  )
+```
+
+```{r}
+# Summarize perf metrics for all tested penalty values
+collect_metrics(lasso_tuned)
+```
+
+```{r}
+# Visualize how ROC AUC & balanced accuracy change
+# as the penalty parameter get bigger
+
+autoplot(lasso_tuned)
+```
+
+```{r}
+# Select the penalty value that produced the highest ROC AUC
+
+best_penalty <- select_best(
+  lasso_tuned,
+  metric = "roc_auc"
+)
+
+best_penalty
+```
+
+
+```{r}
+# Fit the LASSO model using the best penalty value
+
+final_lasso_wf <-
+  finalize_workflow(
+    lasso_wf,
+    best_penalty
+  )
+
+final_lasso_fit <-
+  fit(
+    final_lasso_wf,
+    data = train
+  )
+```
+
+```{r}
+# Get coefficient estimates from the model
+
+coef_table <-
+  tidy(
+    extract_fit_parsnip(final_lasso_fit)$fit
+  )
+```
+
+```{r}
+# Display the predictors rdered by coefficient magnitude
+
+coef_table %>%
+  filter(step == max(step)) %>%
+  arrange(desc(abs(estimate)))
+```
+
+```{r}
+# Count the # of coefficients in the model
+
+coef_table %>%
+  filter(step == max(step)) %>%
+  nrow()
+```
+
+# ASSO Feature Selection Results
+# ROC AUC: 0.895
+# Best penalty: 1e-10
+# Predictors retained: 90
+# Conclusion: LASSO provided minimal feature reduction; most predictors appear to contain useful predictive information.
