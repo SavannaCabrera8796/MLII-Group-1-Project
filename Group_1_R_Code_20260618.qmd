@@ -696,7 +696,7 @@ Below we see the new distribution.
 data_cleaned <- data_cleaned |>
  mutate(damaged = as.factor(if_else(damage_grade %in% c(2, 3), 1, 0)))
 
-
+#remove old damage grade column
 data_cleaned <- data_cleaned %>%
   select(-damage_grade)
 
