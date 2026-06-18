@@ -749,7 +749,7 @@ lasso_recipe <-
 
 ```{r}
 # Check # of predictors after preprocessing
-# This allows us to verify that dummy encoding & grouping of rare
+# This allows me to verify that dummy encoding & grouping of rare
 # geographic levels did not create any large feature space
 
 prep(lasso_recipe) %>%
@@ -771,7 +771,7 @@ lasso_grid <-
 
 ```{r}
 # My LASSO log reg model
-# We use mixture = 1 for L1 regularization, which can shrink
+# I use mixture = 1 for L1 regularization, which can shrink
 # coefficients to 0 and do feature selection
 
 library(glmnet)
