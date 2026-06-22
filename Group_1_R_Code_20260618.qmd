@@ -843,7 +843,6 @@ best_penalty <- select_best(
 best_penalty
 ```
 
-
 ```{r}
 # Fit the LASSO model using the best penalty value
 
@@ -885,8 +884,12 @@ coef_table %>%
   nrow()
 ```
 
-# ASSO Feature Selection Results
+# LASSO Feature Selection Results
+
 # ROC AUC: 0.895
+
 # Best penalty: 1e-10
+
 # Predictors retained: 90
+
 # Conclusion: LASSO provided minimal feature reduction; most predictors appear to contain useful predictive information.
