@@ -488,91 +488,6 @@ labs(
 
 Here we can clearly see that each building material contains different proportions for building damage type. Some, such as stone buildings, contain a much higher proportion of damage level 3 damage than others. RC_Engineered buildings seem to have the least amount of damage. However, trying to keep track of every binary building material type is difficult, causing some issues for interpretation later. In addition, it is hard to distinguish between variables that have similar, yet still different, structures.
 
-We thought it would be wise to group materials that have similar materials together. For example, structures made of bamboo or timber can be condensed into a variable called "super_flexible_wood". As we can see in the plot "Damage Levels for Different Building Materials", both bamboo and timber, materials made from woody plants, have similar distributions of damage type. Following this logic, we tried grouping variables based on shared structural similarities. The work done to do this is found below.
-
-```{r create super groups}
-#Create Superstructure groups
-
-data_cleaned <- data_cleaned %>%
-  mutate(
-    super_catch_all = if_else(has_superstructure_other == 1, 1, 0),
-
-    super_flexible_wood = if_else(
-      has_superstructure_bamboo == 1 |
-        has_superstructure_timber == 1,
-      1, 0
-    ),
-
-    super_modern_concrete = if_else(
-      has_superstructure_rc_engineered == 1 |
-        has_superstructure_rc_non_engineered == 1,
-      1, 0
-    ),
-
-    super_modern_mortar = if_else(
-      has_superstructure_cement_mortar_brick == 1 |
-        has_superstructure_cement_mortar_stone == 1,
-      1, 0
-    ),
-
-    super_stone = if_else(has_superstructure_stone_flag == 1, 1, 0),
-
-    super_traditional_mortar = if_else(
-      has_superstructure_adobe_mud == 1 |
-        has_superstructure_mud_mortar_brick == 1 |
-        has_superstructure_mud_mortar_stone == 1,
-      1, 0
-    )
-  )
-```
-
-```{r review grouped variables}
-#Graph grouped variables
-
-focused_super_vars <- c(
-  "has_superstructure_adobe_mud",
-  "has_superstructure_mud_mortar_brick",
-  "has_superstructure_mud_mortar_stone",
-  "has_superstructure_cement_mortar_brick",
-  "has_superstructure_cement_mortar_stone",
-  "has_superstructure_rc_engineered",
-  "has_superstructure_rc_non_engineered"
-)
-
-focused_super_summary <- data_cleaned %>%
-  select(damage_grade, all_of(focused_super_vars)) %>%
-  pivot_longer(
-    cols = all_of(focused_super_vars),
-    names_to = "variable",
-    values_to = "present"
-  ) %>%
-  filter(present == 1) %>%
-  count(variable, damage_grade) %>%
-  group_by(variable) %>%
-  mutate(prop = n / sum(n)) %>%
-  ungroup()
-
-ggplot(focused_super_summary,
-       aes(x = variable, y = prop, fill = damage_grade)) +
-  geom_col(color = "white") +
-  scale_fill_manual(
-    values = c(
-      "1" = "skyblue",
-      "2" = "darkgoldenrod1",
-      "3" = "red1"
-    )
-  ) +
-  scale_y_continuous(labels = scales::percent_format()) +
-labs(
-  title = "Comparing Similar Building Materials",
-  x = "Building Material",
-  y = "Percent of Buildings",
-  fill = "Damage Grade"
-) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-```
-
 ```{r plot secondary use}
 # Plot detailed secondary use variables only - exclude has_secondary_use because it is the broad master flag
 
@@ -609,72 +524,6 @@ labs(
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
-
-```{r rank superstructure}
-# Compare superstructure groups, ranking the groups by how much severe damage they had
-
-super_group_vars <- c(
-  "super_catch_all",
-  "super_flexible_wood",
-  "super_modern_concrete",
-  "super_modern_mortar",
-  "super_stone",
-  "super_traditional_mortar"
-)
-
-super_group_summary <- data_cleaned %>%
-  select(damage_grade, all_of(super_group_vars)) %>%
-  pivot_longer(
-    cols = all_of(super_group_vars),
-    names_to = "group",
-    values_to = "present"
-  ) %>%
-  filter(present == 1) %>%
-  count(group, damage_grade) %>%
-  group_by(group) %>%
-  mutate(prop = n / sum(n)) %>%
-  ungroup()
-
-ggplot(super_group_summary,
-       aes(x = group, y = prop, fill = damage_grade)) +
-  geom_col(color = "white") +
-  scale_fill_manual(
-    values = c(
-      "1" = "skyblue",
-      "2" = "darkgoldenrod1",
-      "3" = "red1"
-    )
-  ) +
-  scale_y_continuous(labels = scales::percent_format()) +
-  labs(
-    title = "Damage Grade Mix by Brian's Superstructure Groups",
-    x = "Superstructure Group",
-    y = "Percent of Buildings",
-    fill = "Damage Grade"
-  ) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-```
-
-```{r rank by %}
-# ranks the superstructure groups by the % of severe damage
-
-super_group_summary %>%
-  filter(damage_grade == 3) %>%
-  arrange(desc(prop))
-```
-
-**The findings are as follows:**
-
-- [Stone]{.underline} buildings had the highest share of severe damage - almost half were damage grade 3
-
-- [Traditional mortar]{.underline} buildings also performed poorly, with over one-third severely damaged
-
-- [Wood]{.underline} buildings were in the middle
-
-- [Modern concrete]{.underline} buildings had much lower severe damage rates and [modern mortar]{.underline} buildings had the lowest severe damage rate
-
-The table shows that building material is strongly related to earthquake damage. Stone and traditional mortar structures had the highest percentage of severe damage, while modern concrete and modern mortar structures had the lowest. This suggests that newer construction materials may be more resistant to severe damage. The results also support grouping of traditional mortar materials because they appear to behave similarly and have relatively high rates of severe damage.
 
 # Converting to a Binary Classification Problem
 
@@ -883,6 +732,172 @@ coef_table %>%
 filter(estimate == 0)
 ```
 
+
+## LASSO Feature Selection Results
+ ROC AUC: 0.895
+ Best penalty: 1e-10
+ Predictors retained: 90
+
+Conclusion: LASSO provided minimal feature reduction; most predictors appear to contain useful predictive information. Even when selecting a higher penality value, such as 10^-3, it resulted in minimal feature selection. We suspect this is because our data violates some of the assumptions of LASSO logistic regression; namely our sample size is much larger than our parameters, and many of our features are nested within one another and are not mutually exclusive, because of that, we will attempt to use feature importance from random forest models to engage in feature selection. 
+
+## Attempt 2: Feature Importance Measures from RF Models
+
+Based on the following tutorial: https://gedeck.github.io/machine-learning-with-tidymodels/src/605-feature-importance.html
+
+Note that I chose permutation as our importance metric as it is model agnostic.
+
+```{r}
+library(tidymodels)
+library(ranger)
+library(vip)
+library(important)
+
+#Double check this is actually as factors and not dummies
+
+set.seed(420)
+
+data_rf <- train %>%
+  mutate(
+    damaged = as.factor(damaged),
+    across(
+      c(
+        geo_level_1_id,
+        geo_level_2_id,
+        geo_level_3_id,
+        land_surface_condition,
+        foundation_type,
+        roof_type,
+        ground_floor_type,
+        other_floor_type,
+        position,
+        plan_configuration,
+        legal_ownership_status
+      ),
+      as.factor
+    )
+  )
+
+#receta
+rf_recipe <-
+  recipe(damaged ~ ., data = data_rf)
+
+#pretty forest tiem
+rf_spec <-
+  rand_forest(
+    trees = 100
+  ) %>%
+  set_engine(
+    "ranger",
+    importance = "permutation"
+  ) %>%
+  set_mode("classification")
+
+# workflow as usual
+rf_wf <-
+  workflow() %>%
+  add_recipe(rf_recipe) %>%
+  add_model(rf_spec)
+
+# Fit the model
+
+rf_fit <-
+  rf_wf %>%
+  fit(data = data_rf)
+
+# Generate variable importance plot to determine what to keep
+rf_fit %>%
+  extract_fit_engine() %>%
+  vip(num_features = 20)
+
+```
+
+Here we see that Geo level 1 dominates all other variables, followed by mud_motar_stone, and other geo_levels. I suspect the nested nature of geo levels is dominating the feature importance random forest model, so let's remove the finer granularities of geo_level_2 and geo_level_3 and keep ONLY geo_level_1.Let's also remove count_floors_pre_eq as it is highly correlated with height_percentage. Let's rerun my random forest and keep ONLY geo_level_1 in that training:
+
+```{r}
+#frankenstien code from various documents...
+set.seed(420)
+# Recipe with useless variables removed
+rf_recipe <-
+  recipe(damaged ~ ., data = train) %>%
+  step_rm(
+    geo_level_2_id,
+    geo_level_3_id,
+    count_floors_pre_eq
+  ) %>%
+  step_zv(all_predictors()) #from one of the tutorials- probs useless
+
+# Random Forest with permutation importance
+rf_spec <-
+  rand_forest(
+    trees = 200
+  ) %>%
+  set_engine(
+    "ranger",
+    importance = "permutation",
+    num.threads = parallel::detectCores() - 1 #speeds up
+  ) %>%
+  set_mode("classification")
+
+# Workflow
+rf_wf <-
+  workflow() %>%
+  add_recipe(rf_recipe) %>%
+  add_model(rf_spec)
+
+# Fit ONE model
+final_rf_fit <-
+  rf_wf %>%
+  fit(data = train)
+
+# Variable importance plot
+final_rf_fit %>%
+  extract_fit_engine() %>%
+  vip(num_features = 20)
+
+# numeric importance table for all variables
+importance_tbl <-
+  final_rf_fit %>%
+  extract_fit_engine() %>%
+  vip::vi()
+
+importance_tbl %>%
+  arrange(desc(Importance))
+
+```
+
+
+```{r}
+
+importance_tbl <- importance_tbl %>%
+  arrange(desc(Importance)) %>%
+  mutate(
+    cum_importance = cumsum(Importance) / sum(Importance)
+  )
+
+selected_features <- importance_tbl %>%
+  filter(cum_importance <= 0.90) %>%
+  pull(Variable)
+
+selected_features <- c(
+  selected_features,
+  importance_tbl %>%
+    filter(cum_importance > 0.90) %>%
+    slice(1) %>%
+    pull(Variable)
+)
+selected_features <- unique(selected_features)
+
+train_reduced <- train %>%
+  select(any_of(selected_features), damaged)
+
+test_reduced <- test %>%
+  select(any_of(selected_features), damaged)
+
+```
+
+So, in summary, we used a Random Forest Classification Model (using training data) and calculated permutation based variable importance scores. Prior to this, we removed hierarchical variables `geo_level_2_id` and `geo_level_3_id`. This was because geo_level_1_id was one of the most important measures for location and was the lowest granularity geographic variable, making geo levels 2 and 3 largely redundant. We also removed count_floors_pre_eq because it was strongly correlated with height_percentage. Finally, we selected variables that were most important and accounted for 90% of total importance in the data. This preserves most of the future model's predictive performance while simplifying model interpretation and workflow.
+
+
 # Helper Functions
 
 We establish the set of metrics to evaluate each model against to maintain consistency and use helper functions to ensure accurate calculation against each model with minimal code redundancy.
@@ -935,11 +950,3 @@ get_model_metrics <- function(fitted_model, model_name) {
 get_model_metrics(final_lasso_fit,"Lasso")|>
   knitr::kable(digits = 4)
 ```
-
-ROC AUC: 0.895
-
-Best penalty: 1e-10
-
-Predictors retained: 90
-
-Conclusion: LASSO provided minimal feature reduction; most predictors appear to contain useful predictive information.
