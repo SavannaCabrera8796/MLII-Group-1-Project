@@ -16,22 +16,19 @@ knitr::opts_chunk$set(
 
 # Phase 1: Data Wrangling
 
-First stage is to download our various csv files and perform a join to create one master dataframe. We must match by building_id.
+First stage is to download our various .csv files and perform a join to create one master dataframe. We must match by building_id.
 
-```{r}
+```{r load packages}
 #Loading all needed packages
 library(tidyverse)
 library(DT)
 library(patchwork)
-library(tidyverse)
 library(tidymodels)
-library(patchwork)
-library(DT)
 ```
 
 ## Joining the two data sources
 
-```{r}
+```{r join data sources}
 # Read in the two data sources
 train_labels <- readr::read_csv("train_labels.csv")
 train_values <- readr::read_csv("train_values.csv")
@@ -40,19 +37,17 @@ train_values <- readr::read_csv("train_values.csv")
 raw_data <- left_join(train_values, train_labels, by= "building_id")
 ```
 
-We now have a raw data set that contains building values AND their associated damage grade. I also took the opportunity to save this raw data file as a CSV just in case. Note that the code to save to csv was not saved in this code to prevent my computer's copy from potentially corrupting.
+We now have a raw data set that contains building values AND their associated damage grade.
 
 ## Fixing Variable Types
 
-While joining my data, I noticed that the csv read in a lot of integer values as double. This will be a problem for when I am trying to run analysis. I would also need to make sure that each categorical variable is as a factor.
-
-```{r}
+```{r glimpse raw}
 glimpse(raw_data)
 ```
 
-Almost all of my data is in dbl format, not int. If it's not in double format, it is in character format. It should be as factor. Let's start by mutating the columns we need into integers. We will create a new dataframe called "data_cleaned" where all future transformations will occur on it.
+Almost all data is in dbl format, not int. If it's not in double format, it is in character format. These should be factors. Let's start by mutating the columns we need into integers. We will create a new dataframe called "data_cleaned" where all future transformations will occur on it.
 
-```{r}
+```{r mutate to int char}
 data_cleaned <- raw_data %>%
   mutate(
     across(
@@ -82,10 +77,10 @@ data_cleaned <- data_cleaned %>%
 
 ```
 
-Looking at the project's data dictionary, we have the rest of the data as binary and/or categorical variables of multiple levels. We will need to make sure both are converted to factors. Putting them all in a list just in case we need to change factors or binary types later on. This is a first pass.
+Looking at the project's data dictionary, we have the rest of the data as binary and/or categorical variables of multiple levels. We will need to make sure both are converted to factors.
 
-```{r}
-#Parse out da data into the last two types, categorical and binary
+```{r mutate factors}
+#Parse out data into the last two types, categorical and binary
 
 # Categorical variables (multiple levels)
 cat_vars <- c(
@@ -138,15 +133,16 @@ data_cleaned <- data_cleaned %>%
 
 ## Finding and Dealing with NAs
 
-Doing a quick skim of the data on the data viewer, I didn't see any NAs or values that would indicate NAs, but let's double check that with code.
+Doing a quick skim of the data on the data viewer, there doesn't seem to be any NAs or values that would indicate NAs, but we double check that with code.
 
-```{r}
-colSums(is.na(data_cleaned))
+```{r check for na}
+na_cols<-colSums(is.na(data_cleaned))
+na_cols[na_cols>0] %>% sum()
 ```
 
-We confirmed that there are no NAs. I also want to quickly check for duplicates.
+We confirmed that there are no NAs and now we check for duplicates.
 
-```{r}
+```{r check for dupes}
 # Duplicate rows
 data_cleaned %>%
   duplicated() %>%
@@ -157,9 +153,9 @@ We have no NAs and no duplicates.
 
 ## Dropping Unnecessary Columns
 
-It was immediately determined that building_id will be dropped from the table due to the fact it is just an identifier for each row in the data.
+Building_id will be dropped from the table due to the fact it is just an identifier for each row in the data with no additional value.
 
-```{r}
+```{r drop unnecessary}
 # Drop building_id from raw data, as it's just an identifier
 data_cleaned <- data_cleaned %>%
   select(-building_id)
@@ -167,7 +163,7 @@ data_cleaned <- data_cleaned %>%
 
 ## Summary of Initial Data Wrangling
 
-We uploaded the two CSV files, performed a left join and saved the new joined data into a dataframe and csv file. We then made sure that the joined data, then called 'raw_data', had all the variables in the correct format and we checked for NAs. There were no NAs. The current main dataframe we will be using is called "**data_cleaned**".
+We uploaded the two CSV files, performed a left join and saved the new joined data into a dataframe and csv file. We then ensured that the joined data, then called 'raw_data', had all the variables in the correct format. We also confirmed there were no NAs or duplicates. The current main dataframe we will be using is called "**data_cleaned**".
 
 # Phase 2: EDA
 
@@ -177,7 +173,7 @@ Once we have our data into a cleaner place, we can start with performing EDA to 
 
 We know that `damage_grade` will be the response variable of interest. So let's take a look at the class distribution of the 3 damage types.
 
-```{r}
+```{r plot damage_grade}
 # Plot target distribution
 ggplot(data_cleaned, aes(damage_grade, fill = damage_grade)) +
   geom_bar() +
@@ -201,7 +197,7 @@ So here we see we have some class imbalance here. The damage grade of 2 is the m
 
 Let's start by first looking at our purely numerical data. Let's only save the numerical columns to a subset and then generate some summary statistics.
 
-```{r}
+```{r numeric predictors}
 #Using our int transformation list as a basis, but we do not need building_id, any of the geo_lists, or building_damage.
 
 int_subset <- c(
@@ -216,7 +212,7 @@ int_subset <- c(
 
 Now we can generate the summary stats
 
-```{r}
+```{r review numeric predictors}
 data_cleaned %>%
   select(all_of(int_subset)) %>%
   summary()
@@ -226,7 +222,7 @@ We see some evidence of skew and outliers in this dataset, let's further explore
 
 ### Numerical Data Histograms
 
-```{r}
+```{r numeric histograms}
 data_cleaned %>%
   select(all_of(int_subset)) %>%
   pivot_longer(everything(),
@@ -243,9 +239,9 @@ data_cleaned %>%
 
 ### Numerical Data Boxplots
 
-To further investigate our numerical data, I applied a boxplot to three of the variables, `age` `area_percentage`, and `height_percentage`. The count variables were excluded from this analysis due to the variables having relatively few distinct values, making the boxplots illegible.
+To further investigate our numerical data, a boxplot is applied to three of the variables, `age` `area_percentage`, and `height_percentage`. The count variables were excluded from this analysis due to the variables having relatively few distinct values, making the boxplots illegible.
 
-```{r}
+```{r numeric boxplots}
 
 #Noted some wild outliers so let's look at boxplot. Not bothering with select(all_of)
 
@@ -279,7 +275,7 @@ height_boxplot <- ggplot(data_cleaned, aes(x = height_percentage)) +
   )
 ```
 
-Here is a brief summary of what I found:
+**Brief summary of findings:**
 
 `age` - Age skews very young in the dataset. The data is extremely right-skewed, meaning that most buildings in Nepal are only a few years old. There are very few buildings that are older. It can be hard to see in this graph, but there are a few buildings that are "995" years old. Is that correct? Usually an entry code of 999 would indicate an NA value, but 995 could be a realistic age of building in Nepal. After some brief googling, there are some buildings in Nepal that come from 17 CE, or even older. https://www.blackgate.com/2015/04/29/remembering-nepals-ancient-cultural-heritage/. Average age is 26 years, while the median is 16. My suggestion is to remove the extreme outliers from the data and log transform the rest.
 
@@ -297,7 +293,7 @@ We also see that all of these variables have some level of outliers. The worst c
 
 We see how each numerical variable interacts with one another in isolation, but how do they act together?
 
-```{r}
+```{r numeric corr matrix}
 corr_df <- data_cleaned %>%
   select(all_of(int_subset))
 
@@ -313,7 +309,7 @@ As we can clearly see, we have relatively LOW correlation between each numerical
 
 ### Numerical Values and `damage_grade`
 
-```{r}
+```{r numerics against damage_grade}
 data_cleaned %>%
   pivot_longer(
     cols = all_of(int_subset),
@@ -342,7 +338,7 @@ Okay so when we parse out the numerical data across damage grades, we see that `
 
 We now move onto looking at the categorical and binary variables found within this dataset. I want to not only look at their distribution, but also see how it parses out with the damage grades.
 
-```{r}
+```{r categorical review}
 #proportion by damage_grade
 cat_plot_grid <-
   wrap_plots(
@@ -421,7 +417,7 @@ cat_plot_grid <-
 cat_plot_grid
 ```
 
-And now we interpret one-at-a-time per variable.
+**Finding per above variables:**
 
 `land_surface_condition` - While damage grade 2 seems to dominate all three surface conditions, it appears that the proportions are relatively similar for each condition type. Condition type 'o' seems to have a higher proportion of major damage, while condition 't' shares slightly higher damage level 1. However, the patterns look shockingly similar.
 
@@ -441,11 +437,9 @@ And now we interpret one-at-a-time per variable.
 
 ## Binary Variable Data Exploration
 
-# This section compares the binary variables for superstructure and secondary use
+This section compares the binary variables for superstructure and secondary use.
 
-# I used Brian's material that he emailed to the team to group the superstructure variables into broader building categories, then checked if those groups seem reasonable based on damage grade.
-
-```{r}
+```{r super and secondary}
 # Make damage_grade a factor
 data_cleaned <- data_cleaned %>%
   mutate(damage_grade = factor(damage_grade))
@@ -455,8 +449,8 @@ superstructure_vars <- binary_vars[str_detect(binary_vars, "has_superstructure")
 secondary_use_vars <- binary_vars[str_detect(binary_vars, "has_secondary_use")]
 ```
 
-```{r}
-# 1st I look at each superstructure variable by itself - helps show which building materials had much or less severe damage
+```{r review superstructure}
+#Review each superstructure variable by itself - helps show which building materials had much or less severe damage
 
 superstructure_summary <- data_cleaned %>%
   select(damage_grade, all_of(superstructure_vars)) %>%
@@ -492,12 +486,12 @@ labs(
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-Here we can learly see that each building material contain different proportions for building damage type. Some, such as stone buildings, contain a much higher proportion of damage level 3 damage than others. RC_Engineered buildings seem to have the least amount of damage. However, trying to keep track of every binary building material type is difficult, causing some issues for interpretation later. In addition, it is hard to distinguish between variables that have similar, yet still different, structures.
+Here we can clearly see that each building material contains different proportions for building damage type. Some, such as stone buildings, contain a much higher proportion of damage level 3 damage than others. RC_Engineered buildings seem to have the least amount of damage. However, trying to keep track of every binary building material type is difficult, causing some issues for interpretation later. In addition, it is hard to distinguish between variables that have similar, yet still different, structures.
 
 We thought it would be wise to group materials that have similar materials together. For example, structures made of bamboo or timber can be condensed into a variable called "super_flexible_wood". As we can see in the plot "Damage Levels for Different Building Materials", both bamboo and timber, materials made from woody plants, have similar distributions of damage type. Following this logic, we tried grouping variables based on shared structural similarities. The work done to do this is found below.
 
-```{r}
-# Next I create Brian's proposed superstructure groups - not replacing the original variables....this just helps me test me the larger construction groups make sense
+```{r create super groups}
+#Create Superstructure groups
 
 data_cleaned <- data_cleaned %>%
   mutate(
@@ -532,8 +526,8 @@ data_cleaned <- data_cleaned %>%
   )
 ```
 
-```{r}
-# This graph focuses on the variables that Brian proposed grouping together and shows that traditional mortar variables look fairly similar, while engineered and non-engineered concrete are not exactly the same
+```{r review grouped variables}
+#Graph grouped variables
 
 focused_super_vars <- c(
   "has_superstructure_adobe_mud",
@@ -579,8 +573,8 @@ labs(
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-```{r}
-# Plot detailed secondary use variables only, I am leaving out has_secondary_use because it is the broad master flag
+```{r plot secondary use}
+# Plot detailed secondary use variables only - exclude has_secondary_use because it is the broad master flag
 
 secondary_summary <- data_cleaned %>%
   select(damage_grade, all_of(setdiff(secondary_use_vars, "has_secondary_use"))) %>%
@@ -616,8 +610,8 @@ labs(
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-```{r}
-# Compare Brian's broader superstructure groups, ranking the groups by how much severe damage they had
+```{r rank superstructure}
+# Compare superstructure groups, ranking the groups by how much severe damage they had
 
 super_group_vars <- c(
   "super_catch_all",
@@ -662,44 +656,47 @@ ggplot(super_group_summary,
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-```{r}
-# table to help write the EDA section, this ranks the superstructure groups by the % of severe damage
+```{r rank by %}
+# ranks the superstructure groups by the % of severe damage
 
 super_group_summary %>%
   filter(damage_grade == 3) %>%
   arrange(desc(prop))
 ```
 
-The findings are as follows:
+**The findings are as follows:**
 
-Stone buildings had the highest share of severe damage - almost half were damage grade 3
+- [Stone]{.underline} buildings had the highest share of severe damage - almost half were damage grade 3
 
-Traditional mortar buildings also performed poorly, with over one-third severely damaged
+- [Traditional mortar]{.underline} buildings also performed poorly, with over one-third severely damaged
 
-Wood buildings were in the middle
+- [Wood]{.underline} buildings were in the middle
 
-Modern concrete buildings had much lower severe damage rates and modern mortar buildings had the lowest severe damage rate
+- [Modern concrete]{.underline} buildings had much lower severe damage rates and [modern mortar]{.underline} buildings had the lowest severe damage rate
 
-The table shows that building material is strongly related to earthquake damage. Stone and traditional mortar structures had the highest percentage of severe damage, while modern concrete and modern mortar structures had the lowest. This suggests that newer construction materials may be more resistant to severe damage. The results also support Brian's grouping of traditional mortar materials because they appear to behave similarly and have relatively high rates of severe damage.
+The table shows that building material is strongly related to earthquake damage. Stone and traditional mortar structures had the highest percentage of severe damage, while modern concrete and modern mortar structures had the lowest. This suggests that newer construction materials may be more resistant to severe damage. The results also support grouping of traditional mortar materials because they appear to behave similarly and have relatively high rates of severe damage.
 
 # Converting to a Binary Classification Problem
 
-We've decided to restructure this into a binary classification problem which classifies whether or not there would be damage.
+After performing EDA and considering different model approaches, we've decided to restructure this into a binary classification problem which classifies whether or not there would be damage. We've grouped levels 2 and 3 of damage_grade as this simplifies our classification problem in an appropriate manner given the ordinal nature of our classes. We determined it would be most important to predict simply whether there would be damage, instead of whether that damage was moderate to high, as understanding buildings which are at risk for damage is the key.
 
 - **damaged:** 0 for damage_grade=1 (minimal)
 
 - **damaged**: 1 for damage_grade=2,3 (moderate to high)
 
-Below we see the new distribution.
+Below we see the new predictor and its distribution.
 
 ```{r add new damaged indicator and plot distribution}
 data_cleaned <- data_cleaned |>
- mutate(damaged = as.factor(if_else(damage_grade %in% c(2, 3), 1, 0)))
+  mutate(damaged = factor(if_else(damage_grade %in% c(2, 3), "Yes", "No"), 
+                          levels = c("Yes", "No")))
 
 #remove old damage grade column
 data_cleaned <- data_cleaned %>%
   select(-damage_grade)
+```
 
+```{r plot new damaged indicator distribution}
 # Plot target distribution
 ggplot(data_cleaned, aes(damaged, fill = damaged)) +
   geom_bar() +
@@ -710,19 +707,17 @@ ggplot(data_cleaned, aes(damaged, fill = damaged)) +
   ) +
     scale_fill_manual(
             values = c(
-              "0" = "skyblue",
-              "1" = "red1"
+              "No" = "skyblue",
+              "Yes" = "red1"
             )
           )
-
-
 ```
 
 # Test and Train Split
 
-Our next steps are to split the data into an 80/20 test-train split, with strata for damaged. We want to make sure that each data set (test and train) have equal proportions of our damaged indicator
+Our next steps are to split the data into an 80/20 test-train split using *damaged* for strata to ensure that each data set (test and train) have equal proportions of our damaged indicator.
 
-```{r stratify split on damaged }
+```{r stratify split on damaged}
 set.seed(420) 
 data_split <- initial_split(data_cleaned, prop = 0.80, strata=damaged) 
 train <- training(data_split) 
@@ -732,24 +727,30 @@ test <- testing(data_split)
 resamples <- vfold_cv(train, v = 5, strata = damaged)
 ```
 
-```{r}
+```{r lasso recipe prep}
 # groups geographic levels together before dummy encoding
 
 lasso_recipe <-
   recipe(damaged ~ ., data = train) %>%
+#group rare categories <1% into "other"
+#to reduce dummy variables/high cardinality
   step_other(
     geo_level_2_id,
     geo_level_3_id,
     threshold = 0.01
   ) %>%
+#convert categorical to dummy numerics
   step_dummy(all_nominal_predictors()) %>%
+#removes any variables without variance
+#which indicates no model value
   step_zv(all_predictors()) %>%
+#scaled numerics predictors
   step_normalize(all_numeric_predictors())
 ```
 
-```{r}
+```{r lasso predictor check}
 # Check # of predictors after preprocessing
-# This allows me to verify that dummy encoding & grouping of rare
+# To verify that dummy encoding & grouping of rare
 # geographic levels did not create any large feature space
 
 prep(lasso_recipe) %>%
@@ -757,7 +758,7 @@ prep(lasso_recipe) %>%
   dim()
 ```
 
-```{r}
+```{r lasso penalty grid}
 # Create a grid of penalty values to check
 # The penalty controls how strongly LASSO shrinks coefficients toward 0
 # Larger penalties result in larger feature selection
@@ -769,23 +770,23 @@ lasso_grid <-
   )
 ```
 
-```{r}
-# My LASSO log reg model
-# I use mixture = 1 for L1 regularization, which can shrink
-# coefficients to 0 and do feature selection
+```{r lasso specs}
+# LASSO logistic reg model
+# Use mixture = 1 for L1 regularization, which can shrink
+# coefficients to 0 and do automatic feature selection
 
 library(glmnet)
 
 lasso_spec <-
   logistic_reg(
-    penalty = tune(),
+    penalty = tune(), #seek best value by tuning
     mixture = 1
   ) %>%
   set_engine("glmnet")
 ```
 
-```{r}
-# Combine the preprocessing recipe and model spec into a uno workflow.
+```{r lasso wf}
+# Combine the preprocessing recipe/ model spec into a workflow.
 
 lasso_wf <-
   workflow() %>%
@@ -793,7 +794,7 @@ lasso_wf <-
   add_model(lasso_spec)
 ```
 
-```{r}
+```{r parallel computing}
 # Make faster
 library(doParallel)
 
@@ -801,38 +802,30 @@ cl <- makePSOCKcluster(parallel::detectCores() - 1)
 registerDoParallel(cl)
 ```
 
-```{r}
+```{r tune lasso penalty}
 # Tune the penalty parameter using X val
-# I evaluate model perf across a bunch of penalty values
+# Evaluate model perf across penalty values
 # and select the value that max ROC AUC.
 
-set.seed(42)
+set.seed(420)
 
 lasso_tuned <-
   tune_grid(
     lasso_wf,
-    resamples = resamples,
-    grid = lasso_grid,
-    metrics = metric_set(
-      roc_auc,
-      bal_accuracy
-    )
+    resamples = resamples, #5 CFV
+    grid = lasso_grid, #10 penalty levels
+    metrics = metric_set(roc_auc, bal_accuracy)
   )
 ```
 
-```{r}
-# Summarize perf metrics for all tested penalty values
-collect_metrics(lasso_tuned)
-```
-
-```{r}
-# Visualize how ROC AUC & balanced accuracy change
+```{r plot tuning of lasso}
+# Visualize how ROC AUC changes
 # as the penalty parameter get bigger
 
 autoplot(lasso_tuned)
 ```
 
-```{r}
+```{r get best penalty}
 # Select the penalty value that produced the highest ROC AUC
 
 best_penalty <- select_best(
@@ -843,7 +836,7 @@ best_penalty <- select_best(
 best_penalty
 ```
 
-```{r}
+```{r fit lasso with best penalty}
 # Fit the LASSO model using the best penalty value
 
 final_lasso_wf <-
@@ -860,36 +853,93 @@ final_lasso_fit <-
 ```
 
 ```{r}
-# Get coefficient estimates from the model
-
+# Get coefficient estimates from the model at best penalty value
 coef_table <-
   tidy(
-    extract_fit_parsnip(final_lasso_fit)$fit
+    extract_fit_parsnip(final_lasso_fit)
   )
 ```
 
-```{r}
+```{r show predictors by coeff mag}
 # Display the predictors ordered by coefficient magnitude
 
 coef_table %>%
-  filter(step == max(step)) %>%
-  arrange(desc(abs(estimate)))
+  filter(term != "(Intercept)") %>%
+  arrange(desc(abs(estimate)))%>%
+  filter(estimate != 0)
 ```
 
-```{r}
+```{r get count of predictors with nonzero coeff}
 # Count the # of coefficients in the model
-
+# which have not been removed/shrunk to 0
 coef_table %>%
-  filter(step == max(step)) %>%
+  filter(estimate != 0)%>%
   nrow()
 ```
 
-# LASSO Feature Selection Results
+```{r show which predictors are dropped}
+# show which have  been removed/shrunk to 0
+coef_table %>%
+filter(estimate == 0)
+```
 
-# ROC AUC: 0.895
+# Helper Functions
 
-# Best penalty: 1e-10
+We establish the set of metrics to evaluate each model against to maintain consistency and use helper functions to ensure accurate calculation against each model with minimal code redundancy.
 
-# Predictors retained: 90
+```{r define metric set and helper functions}
+#define metric set to be used across models for evaluations and comparison
+class_metrics<- metric_set(roc_auc, bal_accuracy, sens, spec, f_meas, kap)
 
-# Conclusion: LASSO provided minimal feature reduction; most predictors appear to contain useful predictive information.
+#pass fitted model using best parameters + model name
+#function will predict against test data
+get_model_preds <- function(fitted_model, model_name) {
+  augment(fitted_model, new_data = test)
+}
+
+#separe visuals out for organization
+get_model_plots <- function(aug_data, model_name) {
+  roc_plot<-aug_data |>
+    roc_curve(truth = damaged, .pred_Yes) |>
+    autoplot() +
+    labs(
+      title = paste0(model_name, " ROC Curve"),
+      x = "False Positive Rate",
+      y = "True Positive Rate"
+    )
+}
+
+#usage example: 
+#get_model_metrics(final_lasso_fit,"Lasso")
+get_model_metrics <- function(fitted_model, model_name) {
+
+  #get predicted model data to send to graphs
+  aug_data<-get_model_preds(fitted_model, model_name)
+
+  #use same table for metrics table
+  metrics_results<-aug_data|>
+    class_metrics(truth = damaged, estimate = .pred_class, .pred_Yes) |>
+    mutate(model_name = model_name) |>
+    select(model_name, .metric, .estimate) |>
+    pivot_wider(names_from = .metric, values_from = .estimate)
+   
+   #show graphics
+   print(get_model_plots(aug_data, model_name)) 
+   return(metrics_results)
+}
+```
+
+# LASSO Evaluation
+
+```{r lasso evaluation}
+get_model_metrics(final_lasso_fit,"Lasso")|>
+  knitr::kable(digits = 4)
+```
+
+ROC AUC: 0.895
+
+Best penalty: 1e-10
+
+Predictors retained: 90
+
+Conclusion: LASSO provided minimal feature reduction; most predictors appear to contain useful predictive information.
