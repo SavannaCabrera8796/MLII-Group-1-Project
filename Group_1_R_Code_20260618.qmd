@@ -738,7 +738,7 @@ filter(estimate == 0)
  Best penalty: 1e-10
  Predictors retained: 90
 
-Conclusion: LASSO provided minimal feature reduction; most predictors appear to contain useful predictive information. Even when selecting a higher penality value, such as 10^-3, it resulted in minimal feature selection. We suspect this is because our data violates some of the assumptions of LASSO logistic regression; namely our sample size is much larger than our parameters, and many of our features are nested within one another and are not mutually exclusive, because of that, we will attempt to use feature importance from random forest models to engage in feature selection. 
+Conclusion: LASSO provided minimal feature reduction; most predictors appear to contain useful predictive information. Even when selecting a higher penalty value, such as 10^-3, it resulted in minimal feature selection. We suspect this is because our data violates some of the assumptions of LASSO logistic regression; namely our sample size is much larger than our parameters, and many of our features are nested within one another and are not mutually exclusive, because of that, we will attempt to use feature importance from random forest models to engage in feature selection. 
 
 ## Attempt 2: Feature Importance Measures from RF Models
 
@@ -777,11 +777,11 @@ data_rf <- train %>%
     )
   )
 
-#receta
+#recipe for random forest model
 rf_recipe <-
   recipe(damaged ~ ., data = data_rf)
 
-#pretty forest tiem
+#pretty forest
 rf_spec <-
   rand_forest(
     trees = 100
@@ -811,10 +811,10 @@ rf_fit %>%
 
 ```
 
-Here we see that Geo level 1 dominates all other variables, followed by mud_motar_stone, and other geo_levels. I suspect the nested nature of geo levels is dominating the feature importance random forest model, so let's remove the finer granularities of geo_level_2 and geo_level_3 and keep ONLY geo_level_1.Let's also remove count_floors_pre_eq as it is highly correlated with height_percentage. Let's rerun my random forest and keep ONLY geo_level_1 in that training:
+Here we see that Geo level 1 dominates all other variables, followed by mud_mortar_stone, and other geo_levels. I suspect the nested nature of geo levels is dominating the feature importance random forest model, so let's remove the finer granularity of geo_level_2 and geo_level_3 and keep ONLY geo_level_1.Let's also remove count_floors_pre_eq as it is highly correlated with height_percentage. Let's rerun my random forest and keep ONLY geo_level_1 in that training:
 
 ```{r}
-#frankenstien code from various documents...
+#code from various documents/tutorials
 set.seed(420)
 # Recipe with useless variables removed
 rf_recipe <-
@@ -824,7 +824,7 @@ rf_recipe <-
     geo_level_3_id,
     count_floors_pre_eq
   ) %>%
-  step_zv(all_predictors()) #from one of the tutorials- probs useless
+  step_zv(all_predictors()) #from one of the tutorials 
 
 # Random Forest with permutation importance
 rf_spec <-
@@ -912,7 +912,7 @@ get_model_preds <- function(fitted_model, model_name) {
   augment(fitted_model, new_data = test)
 }
 
-#separe visuals out for organization
+#separate visuals out for organization
 get_model_plots <- function(aug_data, model_name) {
   roc_plot<-aug_data |>
     roc_curve(truth = damaged, .pred_Yes) |>
