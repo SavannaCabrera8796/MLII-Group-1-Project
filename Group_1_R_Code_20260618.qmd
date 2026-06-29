@@ -947,8 +947,8 @@ class_metrics<- metric_set(roc_auc, bal_accuracy, sens, spec, f_meas, kap)
 
 #pass fitted model using best parameters + model name
 #function will predict against test data
-get_model_preds <- function(fitted_model, model_name) {
-  augment(fitted_model, new_data = test) ## !!!IMPORTANT" <- if we are going to train against train_reduced than this line needs to be changed to new_data=test_reduced. right now it say test because both RF and Lasso were trained against train in full
+get_model_preds <- function(fitted_model, model_name, new_data) {
+  augment(fitted_model, new_data = new_data) ## !!!IMPORTANT" <- if we are going to train against train_reduced than this line needs to be changed to new_data=test_reduced. right now it say test because both RF and Lasso were trained against train in full
 }
 
 #separate visuals out for organization
@@ -964,10 +964,10 @@ get_model_plots <- function(aug_data, model_name) {
 }
 
 
-get_model_metrics <- function(fitted_model, model_name) {
+get_model_metrics <- function(fitted_model, model_name, new_data) {
 
   #get predicted model data to send to graphs
-  aug_data<-get_model_preds(fitted_model, model_name)
+  aug_data<-get_model_preds(fitted_model, model_name, new_data)
 
   #use same table for metrics table
   metrics_results<-aug_data|>
@@ -985,14 +985,21 @@ get_model_metrics <- function(fitted_model, model_name) {
 # SAMPLE HELPER FUNCTION USAGE ONLY!! TO BE REMOVED AND ONLY USED FOR MODELS.
 
 ```{r lasso evaluation}
-get_model_metrics(final_rf_fit,"Random forest Feature Selection Only")|>
+get_model_metrics(final_rf_fit,"Random forest Feature Selection Only", test)|>
   knitr::kable(digits = 4)
-get_model_metrics(final_lasso_fit,"Lasso Feature Selection Only")|>
+get_model_metrics(final_lasso_fit,"Lasso Feature Selection Only", test)|>
   knitr::kable(digits = 4)
 ```
 
-# Phase \# 6 Model Implementations
-# Logistic Regression with L1 (LASSO) and L2 (Ridge)
+# Models
+
+Now that we have a reduced feature list from our random forest model, we can now attempt to build models off of our new reduced data set, train_reduced. We break out models into 5 major sections; Logistic Regression, LDA, QDA, Random Forests with Ensemble Methods, and XGBoost. 
+
+## Logistic Regression with L1 (LASSO) and L2 (Ridge) Regularization
+
+We will start this analysis in threes, one with pure lasso (after feature selection), one with pure ridge, and one with a mix of both, which is an elasticnet model. 
+
+### Pure L1
 
 ```{r create tunning grid}
 logistic_grid <-
@@ -1003,6 +1010,7 @@ logistic_grid <-
 ```
 
 ```{r Log Reg}
+
 lasso_spec <-
   logistic_reg(
     penalty = tune(),
@@ -1010,9 +1018,19 @@ lasso_spec <-
   ) %>%
   set_engine("glmnet")
 
+#New recipe based on the results from feature selection
+logistic_recipe <-
+  recipe(damaged ~ ., data = train_reduced) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_zv(all_predictors()) %>%
+  step_normalize(all_numeric_predictors())
+
+#New CV folds for reduced dataset
+resamples_reduced <- vfold_cv(train_reduced, v = 5, strata = damaged)
+
 lasso_wf <-
   workflow() %>%
-  add_recipe(lasso_recipe) %>%
+  add_recipe(logistic_recipe) %>%
   add_model(lasso_spec)
 
 set.seed(42)
@@ -1020,7 +1038,7 @@ set.seed(42)
 lasso_tuned <-
   tune_grid(
     lasso_wf,
-    resamples = resamples,
+    resamples = resamples_reduced,
     grid = logistic_grid,
     metrics = metric_set(roc_auc, bal_accuracy)
   )
@@ -1048,7 +1066,7 @@ final_lasso_wf <-
 final_lasso_fit <-
   fit(
     final_lasso_wf,
-    data = train
+    data = train_reduced
   )
 ```
 ```{r Review LASSO coefficents}
@@ -1061,6 +1079,9 @@ lasso_coef %>%
   filter(term != "(Intercept)") %>%
   arrange(desc(abs(estimate)))
 ```
+
+### Pure L2
+
 ```{r Log Re Ridgeg}
 ridge_spec <-
   logistic_reg(
@@ -1071,7 +1092,7 @@ ridge_spec <-
 
 ridge_wf <-
   workflow() %>%
-  add_recipe(lasso_recipe) %>%
+  add_recipe(logistic_recipe) %>%
   add_model(ridge_spec)
 
 set.seed(42)
@@ -1079,7 +1100,7 @@ set.seed(42)
 ridge_tuned <-
   tune_grid(
     ridge_wf,
-    resamples = resamples,
+    resamples = resamples_reduced,
     grid = logistic_grid,
     metrics = metric_set(roc_auc, bal_accuracy)
   )
@@ -1106,7 +1127,7 @@ final_ridge_wf <-
 final_ridge_fit <-
   fit(
     final_ridge_wf,
-    data = train
+    data = train_reduced
   )
 ```
 ```{r Log Reg Ridge coefficents}
@@ -1119,23 +1140,140 @@ ridge_coef %>%
   filter(term != "(Intercept)") %>%
   arrange(desc(abs(estimate)))
 ```
-```{r Helper Function}
+
+### L1 and L2 (Elastic)
+
+Sources for running this code in a semi-speedy manner can be found in this documentation: https://tune.tidymodels.org/reference/control_bayes.html and https://tune.tidymodels.org/reference/tune_bayes.html
+
+```{r elastic log reg}
+set.seed(420)
+
+# specify the elastic model:
+elastic_spec <-
+  logistic_reg(
+    penalty = tune(),
+    mixture = tune()
+  ) %>%
+  set_engine("glmnet") %>%
+  set_mode("classification")
+
+#set up my param space
+elastic_params <-
+  parameters(
+    penalty(),
+    mixture())
+
+elastic_params <- finalize(elastic_params, train_reduced)
+
+#wf like normal
+elastic_wf <-
+  workflow() %>%
+  add_recipe(logistic_recipe) %>%
+  add_model(elastic_spec)
+
+#bayesian hyperparameter optimization
+#control aspects found in tidyverse documentation
+elastic_tune <-
+  tune_bayes(
+    elastic_wf,
+    resamples = resamples_reduced,
+    initial = 10,
+    iter = 15,
+    param_info = elastic_params,
+    metrics = metric_set(roc_auc,bal_accuracy),
+    control = control_bayes(verbose = TRUE, no_improve = 5, save_pred = FALSE)
+  )
+
+#Grab our best version
+best_elastic <-
+  select_best(elastic_tune, metric = "roc_auc")
+
+best_elastic
+
+```
+
+According to this, our best elasticnet parameters uses a penalty of 0.0000359 and a mixture of 0.111.
+
+```{r fit elastic log reg}
+# Finalize wf
+final_elastic_wf <-
+  finalize_workflow(
+    elastic_wf,
+    best_elastic
+  )
+
+# Fit model
+final_elastic_fit <-
+  fit(
+    final_elastic_wf,
+    data = train_reduced
+  )
+```
+```{r Log Reg elastic coefficents}
+elastic_coef <-
+  tidy(
+    extract_fit_parsnip(final_elastic_fit)
+  )
+
+elastic_coef %>%
+  filter(term != "(Intercept)") %>%
+  arrange(desc(abs(estimate)))
+```
+
+
+### Summary
+
+```{r test metrics}
 get_model_metrics(
   final_lasso_fit,
-  "L1 Log Regression -LASSO"
+  "L1 Log Regression -LASSO",
+  test_reduced
 ) |>
   knitr::kable(digits = 4)
 
 get_model_metrics(
   final_ridge_fit,
-  "L2 Log Reg - Ridge"
+  "L2 Log Reg - Ridge",
+  test_reduced
+) |>
+  knitr::kable(digits = 4)
+
+get_model_metrics(
+  final_elastic_fit,
+  "L1+L2 Log Reg - Elastic",
+  test_reduced
 ) |>
   knitr::kable(digits = 4)
 ```
 
-# Summary:
-# Ridge reg performed similarly to LASSO, ie ROC AUC of ~ 0.90 and accuracy ~ 0.64. The model was stable across small
-# penalty values but perf declined with stronger regularization. Unlike LASSO, Ridge kept all predictors by shrinking their coefficients
-# instead of setting some to 0. Random Forest still achieved the best overall predictive perf.
+Here we see that the model metrics show that, in terms of test metrics, all three of these models are roughly balanced. Elastic net based model does the best overall, with the highest ROC_AUC and the best balanced accuracy. That being said, these are the general metrics looking at *all* responses. We care about predicting whether or not a building will get damage, and damage is a rare class. Therefore, we should also consider the f_meas and sensitivity. In terms of sensitivity scores, the ridge regression does best, having the sensitvity of 0.9803. the other two models are tied at 0.9778, which is not that far off. In terms of f_meas, the elastic net and lasso are tied for the best at an f_meas of 0.9533. 
+
+Over all, these three differently trained models are very similar in terms of test performance, with the elastic model slightly winning out overall. 
+
+Let's check training metrics for any signs of overfitting:
 
 
+```{r train metrics}
+get_model_metrics(
+  final_lasso_fit,
+  "L1 Log Regression -LASSO",
+  train_reduced
+) |>
+  knitr::kable(digits = 4)
+
+get_model_metrics(
+  final_ridge_fit,
+  "L2 Log Reg - Ridge",
+  train_reduced
+) |>
+  knitr::kable(digits = 4)
+
+get_model_metrics(
+  final_elastic_fit,
+  "L1+L2 Log Reg - Elastic",
+  train_reduced
+) |>
+  knitr::kable(digits = 4)
+```
+
+No real signs of overfitting, that's good!
