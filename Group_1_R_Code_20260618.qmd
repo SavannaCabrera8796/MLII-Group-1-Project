@@ -1277,3 +1277,78 @@ get_model_metrics(
 ```
 
 No real signs of overfitting, that's good!
+
+## LDA
+
+```{r}
+library(discrim)
+set.seed(420)
+#covariance matrix got funky, making QDA not work
+#Looks like there was still enough multicollinearity to cause a crash
+#use PCA to tf correlated variables into orthoganal friends
+ldaqda_recipe <- recipe(damaged ~ ., data = train_reduced) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_normalize(all_numeric_predictors()) %>% 
+  step_pca(all_numeric_predictors(), num_comp = 10) 
+
+lda_spec <- discrim_linear() %>%
+  set_engine("MASS") %>%
+  set_mode("classification")
+
+lda_wf <- workflow() %>%
+  add_recipe(ldaqda_recipe) %>%
+  add_model(lda_spec)
+
+lda_fit <- fit(lda_wf, data = train_reduced)
+```
+
+Note that LDA does not require tuning params
+
+### Summary
+```{r}
+get_model_metrics(
+  lda_fit,
+  "LDA",
+  test_reduced
+) |>
+  knitr::kable(digits = 4)
+
+
+```
+
+The LDA model has a balanced accuracy of 0.6928, and a roc AUC of 0.8295, which is quite a bit worse than our logistic model attempts. It is worse in all measures.
+
+## QDA
+
+
+```{r}
+qda_spec <- discrim_quad() %>%
+  set_engine("MASS") %>%
+  set_mode("classification")
+
+qda_wf <- workflow() %>%
+  add_recipe(ldaqda_recipe) %>%
+  add_model(qda_spec)
+
+qda_fit <- fit(qda_wf, data = train_reduced)
+```
+
+Now that we fitted....
+
+### Summary 
+
+```{r}
+get_model_metrics(
+  qda_fit,
+  "QDA",
+  test_reduced
+) |>
+  knitr::kable(digits = 4)
+
+
+```
+
+QDA (with PCA assistance) performed a bit better than LDA. This makes sense as QDA typically has more relaxed assumptions than LDA. Chiefly that each class has it's own covariance matrix. That being said, it looks like our data, even with the reduced features, didn't match the model assumptions for LDA or QDA well enough. Chiefly, we have a lot of binary variables in our data, which breaks the Gaussian assumption for LDA and QDA. Those binary variables are, remember, bernoulli, not gaussian. 
+
+## Next models: XGBoost, Random Forest, SVM, or KNN.
+SEC NOTE: our data is likely non-linear, highly collinear, and all messssyyyyy, I suspect tree-based methods like RF, XGBoost, and SVM would win out the most here. We could consider dropping LDA and/or QDA in favor of XGBoost (professor preferred), Random Forest, and SVM. 
