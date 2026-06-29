@@ -992,3 +992,150 @@ get_model_metrics(final_lasso_fit,"Lasso Feature Selection Only")|>
 ```
 
 # Phase \# 6 Model Implementations
+# Logistic Regression with L1 (LASSO) and L2 (Ridge)
+
+```{r create tunning grid}
+logistic_grid <-
+  grid_regular(
+    penalty(),
+    levels = 10
+  )
+```
+
+```{r Log Reg}
+lasso_spec <-
+  logistic_reg(
+    penalty = tune(),
+    mixture = 1        # L1 Regularization
+  ) %>%
+  set_engine("glmnet")
+
+lasso_wf <-
+  workflow() %>%
+  add_recipe(lasso_recipe) %>%
+  add_model(lasso_spec)
+
+set.seed(42)
+
+lasso_tuned <-
+  tune_grid(
+    lasso_wf,
+    resamples = resamples,
+    grid = logistic_grid,
+    metrics = metric_set(roc_auc, bal_accuracy)
+  )
+```
+
+```{r View tuning results}
+autoplot(lasso_tuned)
+```
+
+```{r select best penalty}
+best_lasso <-
+  select_best(
+    lasso_tuned,
+    metric = "roc_auc"
+  )
+```
+```{r Fin WF}
+final_lasso_wf <-
+  finalize_workflow(
+    lasso_wf,
+    best_lasso
+  )
+```
+```{r FM}
+final_lasso_fit <-
+  fit(
+    final_lasso_wf,
+    data = train
+  )
+```
+```{r Review LASSO coefficents}
+lasso_coef <-
+  tidy(
+    extract_fit_parsnip(final_lasso_fit)
+  )
+
+lasso_coef %>%
+  filter(term != "(Intercept)") %>%
+  arrange(desc(abs(estimate)))
+```
+```{r Log Re Ridgeg}
+ridge_spec <-
+  logistic_reg(
+    penalty = tune(),
+    mixture = 0        # L2 Regularization
+  ) %>%
+  set_engine("glmnet")
+
+ridge_wf <-
+  workflow() %>%
+  add_recipe(lasso_recipe) %>%
+  add_model(ridge_spec)
+
+set.seed(42)
+
+ridge_tuned <-
+  tune_grid(
+    ridge_wf,
+    resamples = resamples,
+    grid = logistic_grid,
+    metrics = metric_set(roc_auc, bal_accuracy)
+  )
+```
+```{r Logistic Reg Ridge continued}
+# View tune results
+autoplot(ridge_tuned)
+
+# Select best penalty
+best_ridge <-
+  select_best(
+    ridge_tuned,
+    metric = "roc_auc"
+  )
+
+# Finalize wf
+final_ridge_wf <-
+  finalize_workflow(
+    ridge_wf,
+    best_ridge
+  )
+
+# Fit model
+final_ridge_fit <-
+  fit(
+    final_ridge_wf,
+    data = train
+  )
+```
+```{r Log Reg Ridge coefficents}
+ridge_coef <-
+  tidy(
+    extract_fit_parsnip(final_ridge_fit)
+  )
+
+ridge_coef %>%
+  filter(term != "(Intercept)") %>%
+  arrange(desc(abs(estimate)))
+```
+```{r Helper Function}
+get_model_metrics(
+  final_lasso_fit,
+  "L1 Log Regression -LASSO"
+) |>
+  knitr::kable(digits = 4)
+
+get_model_metrics(
+  final_ridge_fit,
+  "L2 Log Reg - Ridge"
+) |>
+  knitr::kable(digits = 4)
+```
+
+# Summary:
+# Ridge reg performed similarly to LASSO, ie ROC AUC of ~ 0.90 and accuracy ~ 0.64. The model was stable across small
+# penalty values but perf declined with stronger regularization. Unlike LASSO, Ridge kept all predictors by shrinking their coefficients
+# instead of setting some to 0. Random Forest still achieved the best overall predictive perf.
+
+
