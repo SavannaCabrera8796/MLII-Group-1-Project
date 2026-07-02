@@ -1162,7 +1162,6 @@ elastic_params <-
   parameters(
     penalty(),
     mixture())
-
 elastic_params <- finalize(elastic_params, train_reduced)
 
 #wf like normal
@@ -1209,6 +1208,8 @@ final_elastic_fit <-
     data = train_reduced
   )
 ```
+
+
 ```{r Log Reg elastic coefficents}
 elastic_coef <-
   tidy(
@@ -1313,13 +1314,17 @@ get_model_metrics(
 ) |>
   knitr::kable(digits = 4)
 
-
+get_model_metrics(
+  lda_fit,
+  "LDA",
+  train_reduced
+) |>
+  knitr::kable(digits = 4)
 ```
 
 The LDA model has a balanced accuracy of 0.6928, and a roc AUC of 0.8295, which is quite a bit worse than our logistic model attempts. It is worse in all measures.
 
 ## QDA
-
 
 ```{r}
 qda_spec <- discrim_quad() %>%
@@ -1345,10 +1350,141 @@ get_model_metrics(
 ) |>
   knitr::kable(digits = 4)
 
-
+get_model_metrics(
+  qda_fit,
+  "QDA",
+  train_reduced
+) |>
+  knitr::kable(digits = 4)
 ```
 
 QDA (with PCA assistance) performed a bit better than LDA. This makes sense as QDA typically has more relaxed assumptions than LDA. Chiefly that each class has it's own covariance matrix. That being said, it looks like our data, even with the reduced features, didn't match the model assumptions for LDA or QDA well enough. Chiefly, we have a lot of binary variables in our data, which breaks the Gaussian assumption for LDA and QDA. Those binary variables are, remember, bernoulli, not gaussian. 
 
-## Next models: XGBoost, Random Forest, SVM, or KNN.
+## Random Forest Model with Ensemble Methods
+
+Now we will do a random forest model using ensemble methods, not for the purpose of feature selection, but for the purpose of modeling for real.
+
+```{r}
+#GOTTA do this or else it takes forever
+library(doParallel)
+#set the seed
+set.seed(420)
+
+#receta
+rf_recipe <-
+  recipe(damaged ~ ., data = train_reduced) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_zv(all_predictors())
+
+#Set up random forest model
+#tune min observation in anode
+#and tune mtry
+rf_model <-
+  rand_forest(
+    trees = 200, # 200 seems to balance time ok
+    mtry = tune(),
+    min_n = tune()
+  ) %>%
+  set_engine(
+    "ranger",
+    importance = "permutation"
+  ) %>%
+  set_mode("classification")
+
+#create workflow
+rf_workflow <-
+  workflow() %>%
+  add_recipe(rf_recipe) %>%
+  add_model(rf_model)
+
+set.seed(420)
+
+#new CV codeline for speed
+folds_sm <- vfold_cv(train_reduced, v = 3, strata = damaged)
+
+#grid based on parameter size
+rf_grid <- grid_random(
+  finalize(mtry(), train_reduced),
+  min_n(),
+  size = 10
+)
+
+#Make sure para processing works, my computer has 6 cores
+cl <- makePSOCKcluster(6)
+registerDoParallel(cl)
+
+rf_tuned <-
+  tune_grid(
+    rf_workflow,
+    resamples = folds_sm,
+    grid = rf_grid,
+    metrics = metric_set(roc_auc),
+    control = control_grid(
+      parallel_over = "everything",
+      save_pred = TRUE
+    )
+  )
+stopCluster(cl) #then stop clustering
+
+#what's our best
+best_rf <-
+  select_best(
+    rf_tuned,
+    metric = "roc_auc"
+  )
+
+best_rf
+```
+
+So it was determined that the best model parameters has an mtry value of 10 and a min_n of 16. Let's tune the final model:
+
+```{r}
+#now train final model
+#no need for permutation this time?
+rf_final <-
+  rand_forest(
+    trees = 500,
+    mtry = best_rf$mtry,
+    min_n = best_rf$min_n
+  ) %>%
+  set_engine(
+    "ranger",
+    importance = "none"
+  ) %>%
+  set_mode("classification")
+
+final_workflow <-
+  workflow() %>%
+  add_recipe(rf_recipe) %>%
+  add_model(rf_final)
+
+rf_fit <-
+  fit(
+    final_workflow,
+    data = train_reduced
+  )
+```
+
+### Summary
+
+And now we can check the test and train metrics:
+
+```{r}
+get_model_metrics(
+  rf_fit,
+  "Random Forest",
+  test_reduced
+) |>
+  knitr::kable(digits = 4)
+
+get_model_metrics(
+  rf_fit,
+  "Random Forest",
+  train_reduced
+) |>
+  knitr::kable(digits = 4)
+
+```
+
+## Next models: XGBoost, SVM, or KNN.
 SEC NOTE: our data is likely non-linear, highly collinear, and all messssyyyyy, I suspect tree-based methods like RF, XGBoost, and SVM would win out the most here. We could consider dropping LDA and/or QDA in favor of XGBoost (professor preferred), Random Forest, and SVM. 
