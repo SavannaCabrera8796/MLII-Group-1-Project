@@ -1360,9 +1360,9 @@ get_model_metrics(
 
 QDA (with PCA assistance) performed a bit better than LDA. This makes sense as QDA typically has more relaxed assumptions than LDA. Chiefly that each class has it's own covariance matrix. That being said, it looks like our data, even with the reduced features, didn't match the model assumptions for LDA or QDA well enough. Chiefly, we have a lot of binary variables in our data, which breaks the Gaussian assumption for LDA and QDA. Those binary variables are, remember, bernoulli, not gaussian. 
 
-## Random Forest Model with Ensemble Methods
+## Random Forest Model with Bagging
 
-Now we will do a random forest model using ensemble methods, not for the purpose of feature selection, but for the purpose of modeling for real.
+Now we will do a random forest model using ensemble methods, not for the purpose of feature selection, but for the purpose of modeling for real. Here this is Random Forest-style ensemble using bagging
 
 ```{r}
 #GOTTA do this or else it takes forever
