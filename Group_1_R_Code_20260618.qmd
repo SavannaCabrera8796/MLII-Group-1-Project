@@ -1406,7 +1406,7 @@ rf_workflow <-
   add_recipe(rf_recipe) %>%
   add_model(rf_model)
 
-# Set up our smaller CV validation
+# Set up our smaller CV validation for speed
 
 set.seed(420)
 
@@ -1422,12 +1422,14 @@ folds_sm <-
 rf_grid <-
   grid_random(
     finalize(mtry(), train_reduced),
-    min_n(range = c(5L, 30L)),
+    min_n(range = c(5, 30)),
     size = 5
   )
 
 # Set up parallel processing to be machine agnostic
-
+# detect # of cores and subtract 1 so it doesnt crash
+# then split into n-1 R sessions to tune model then
+#turn off parallel procesing afterwards
 n_cores <- max(1, detectCores() - 1)
 cl <- makePSOCKcluster(n_cores)
 registerDoParallel(cl)
@@ -1437,7 +1439,7 @@ on.exit({
 }, add = TRUE)
 
 # Tune the model with our best stuff
-
+# parallel_over everything to speed this along
 rf_tuned <-
   tune_grid(
     rf_workflow,
