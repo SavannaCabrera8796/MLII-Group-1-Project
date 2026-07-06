@@ -782,10 +782,8 @@ library(tidymodels)
 library(ranger)
 library(vip)
 library(important)
-
-#Double check this is actually as factors and not dummies
-
 set.seed(420)
+#Double check this is actually as factors and not dummies
 
 #new df from the training data so need to mutate again
 data_rf <- train %>%
@@ -982,14 +980,6 @@ get_model_metrics <- function(fitted_model, model_name, new_data) {
 }
 ```
 
-# SAMPLE HELPER FUNCTION USAGE ONLY!! TO BE REMOVED AND ONLY USED FOR MODELS.
-
-```{r lasso evaluation}
-get_model_metrics(final_rf_fit,"Random forest Feature Selection Only", test)|>
-  knitr::kable(digits = 4)
-get_model_metrics(final_lasso_fit,"Lasso Feature Selection Only", test)|>
-  knitr::kable(digits = 4)
-```
 
 # Models
 
@@ -998,6 +988,12 @@ Now that we have a reduced feature list from our random forest model, we can now
 ## Logistic Regression with L1 (LASSO) and L2 (Ridge) Regularization
 
 We will start this analysis in threes, one with pure lasso (after feature selection), one with pure ridge, and one with a mix of both, which is an elasticnet model. 
+
+We chose a logistic regression model due to the fact our preprocessing steps combined some response classes into a binary classification problem, making logistic regression an appropriate choice. An Elasticnet Logistic Regression model is especially helpful here as it combines L1 and L2 regularization, allowing it to perform additional coefficient shrinkage and feature selection while also maintaining model performance when predictors are correlated. This is especially important because we still have some correlated variables after feature selection, this dataset is full of such variables. 
+
+ElasticNet provides a balance between interpretability and predictive performance, both of which are important for this dataset, as we wish to accurately predict which buildings are at risk for future earthquake damage and be able to explain which factors most contribute to whether or not a building gets damaged or not.
+
+For illustration sake, we started with a pure lasso regression on our reduced feature list, then pure ridge regression, and finally our ElasticNet with CV. 
 
 ### Pure L1
 
@@ -1141,7 +1137,7 @@ ridge_coef %>%
   arrange(desc(abs(estimate)))
 ```
 
-### L1 and L2 (Elastic)
+### L1 and L2 (ElasticNet)
 
 Sources for running this code in a semi-speedy manner can be found in this documentation: https://tune.tidymodels.org/reference/control_bayes.html and https://tune.tidymodels.org/reference/tune_bayes.html
 
@@ -1172,6 +1168,7 @@ elastic_wf <-
 
 #bayesian hyperparameter optimization
 #control aspects found in tidyverse documentation
+#control aspects helps w/ runtime
 elastic_tune <-
   tune_bayes(
     elastic_wf,
@@ -1281,6 +1278,8 @@ No real signs of overfitting, that's good!
 
 ## LDA
 
+The next model we will attempt to run is Linear Discriminant Analysis (LDA). LDA can be helpful with this dataset after our preprocessing steps, turning the response variable into a binary variable as well as removing quite a few less-important variables. LDA can also be useful due to the fact that is looks at the mean differences between damage categories and the covariance matrix of the predictors to maximize separation between the two classes. It's also slightly more interpretable than an ElasticNet Logistic Regression model. However, LDA does come with a large caveat; it requires that predictors within each class follow a roughly normal distribution and share similar enough covariance matrices. We hope that our feature selection helps adhere to this assumption. 
+
 ```{r}
 library(discrim)
 set.seed(420)
@@ -1303,7 +1302,7 @@ lda_wf <- workflow() %>%
 lda_fit <- fit(lda_wf, data = train_reduced)
 ```
 
-Note that LDA does not require tuning params
+Note that LDA does not require tuning parameters.
 
 ### Summary
 ```{r}
@@ -1325,6 +1324,11 @@ get_model_metrics(
 The LDA model has a balanced accuracy of 0.6928, and a roc AUC of 0.8295, which is quite a bit worse than our logistic model attempts. It is worse in all measures.
 
 ## QDA
+
+We then turn to QDA for similar reasons as LDA. QDA is appropriate for this dataset after our preprocessing steps, including converting the response variable into a binary classification problem and reducing the number of predictors through feature selection. Unlike LDA, QDA does not assume that both damage categories share the same covariance matrix; instead, it allows each class to have its own covariance structure. This added flexibility may improve model performance, as the relationships between structural and geographic characteristics may differ among buildings experiencing different levels of earthquake damage. 
+
+By incorporating class-specific covariance matrices, QDA can capture more complex decision boundaries than LDA, potentially improving classification performance when the two damage categories are not well separated by a linear boundary. While QDA is somewhat less simple than LDA due to its quadratic decision boundary, it still provides useful insight into how predictor variables contribute to distinguishing between damage categories.
+
 
 ```{r}
 qda_spec <- discrim_quad() %>%
@@ -1362,56 +1366,77 @@ QDA (with PCA assistance) performed a bit better than LDA. This makes sense as Q
 
 ## Random Forest Model with Bagging
 
-Now we will do a random forest model using ensemble methods, not for the purpose of feature selection, but for the purpose of modeling for real. Here this is Random Forest-style ensemble using bagging
+Now we will do a random forest model using ensemble methods, not for the purpose of feature selection, but for the purpose of modeling for real. 
+
+Random Forest models are exceptionally flexible non-parametic models that can easily capture nonlinear relationships and interaction effects. Our data contains just that, quite a bit of complex interaction effects and non-linear relationships. These variables may not be able to be captured by linear classification models such as ElasticNet Logistic Regression, LDA, and QDA models. Random Forest also doesn't require any additional assumptions like the first three either. The bagging process can also reduce the variance by training many decision trees on different bootstrap samples of the data and then averaging their predictions, which can help prevent overfitting and noisy variance. Random forest, however, does suffer from a lack of interpretability if the resulting tree is large and complex, but that can be resolved with calculating feature importance. 
 
 ```{r}
-#GOTTA do this or else it takes forever
+library(tidymodels)
+library(ranger)
 library(doParallel)
-#set the seed
+library(parallel)
+
+# Set seed
 set.seed(420)
 
-#receta
+# RECETA
+
 rf_recipe <-
   recipe(damaged ~ ., data = train_reduced) %>%
-  step_dummy(all_nominal_predictors()) %>%
   step_zv(all_predictors())
 
-#Set up random forest model
-#tune min observation in anode
-#and tune mtry
+# Set up the RF model
+
 rf_model <-
   rand_forest(
-    trees = 200, # 200 seems to balance time ok
+    trees = 100, #MAKE THIS SMALL FOR FAST
     mtry = tune(),
     min_n = tune()
   ) %>%
   set_engine(
     "ranger",
-    importance = "permutation"
+    num.threads = 1
   ) %>%
   set_mode("classification")
 
-#create workflow
+# Workflow
+
 rf_workflow <-
   workflow() %>%
   add_recipe(rf_recipe) %>%
   add_model(rf_model)
 
+# Set up our smaller CV validation
+
 set.seed(420)
 
-#new CV codeline for speed
-folds_sm <- vfold_cv(train_reduced, v = 3, strata = damaged)
+folds_sm <-
+  vfold_cv(
+    train_reduced,
+    v = 3,
+    strata = damaged
+  )
 
-#grid based on parameter size
-rf_grid <- grid_random(
-  finalize(mtry(), train_reduced),
-  min_n(),
-  size = 10
-)
+# Set up our hyperparameter grid
 
-#Make sure para processing works, my computer has 6 cores
-cl <- makePSOCKcluster(6)
+rf_grid <-
+  grid_random(
+    finalize(mtry(), train_reduced),
+    min_n(range = c(5L, 30L)),
+    size = 5
+  )
+
+# Set up parallel processing to be machine agnostic
+
+n_cores <- max(1, detectCores() - 1)
+cl <- makePSOCKcluster(n_cores)
 registerDoParallel(cl)
+on.exit({
+  stopCluster(cl)
+  registerDoSEQ()
+}, add = TRUE)
+
+# Tune the model with our best stuff
 
 rf_tuned <-
   tune_grid(
@@ -1421,12 +1446,12 @@ rf_tuned <-
     metrics = metric_set(roc_auc),
     control = control_grid(
       parallel_over = "everything",
-      save_pred = TRUE
+      save_pred = FALSE,
+      verbose = TRUE
     )
   )
-stopCluster(cl) #then stop clustering
 
-#what's our best
+# Select Best Value
 best_rf <-
   select_best(
     rf_tuned,
@@ -1439,6 +1464,7 @@ best_rf
 So it was determined that the best model parameters has an mtry value of 10 and a min_n of 16. Let's tune the final model:
 
 ```{r}
+set.seed(420)
 #now train final model
 #no need for permutation this time?
 rf_final <-
@@ -1448,8 +1474,7 @@ rf_final <-
     min_n = best_rf$min_n
   ) %>%
   set_engine(
-    "ranger",
-    importance = "none"
+    "ranger"
   ) %>%
   set_mode("classification")
 
