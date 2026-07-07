@@ -618,7 +618,7 @@ resamples <- vfold_cv(train, v = 5, strata = damaged)
 
 ## Attempt #1: Lasso
 
-As part of our attempt at using Lasso to reduce our feature set, we address the high cardinality of geo levels by grouping the rare categories of `geo_level_3_id` and `geo_level_3_id` which occur less than 1% into an "other" category. We take other preprocessing steps such as converting all categorical values to dummy numerics, removing any predictors that due not explain variance in the model, and normalizing all numeric predictors.
+As part of our attempt at using Lasso to reduce our feature set, we address the high cardinality of geo levels by grouping the rare categories of `geo_level_2_id` and `geo_level_3_id` which occur less than 1% into an "other" category. We take other preprocessing steps such as converting all categorical values to dummy numerics, removing any predictors that due not explain variance in the model, and normalizing all numeric predictors.
 
 ```{r lasso recipe prep}
 # groups geographic levels together before dummy encoding
@@ -1065,7 +1065,7 @@ final_lasso_fit <-
     data = train_reduced
   )
 ```
-```{r Review LASSO coefficents}
+```{r Review LASSO coefficients}
 lasso_coef <-
   tidy(
     extract_fit_parsnip(final_lasso_fit)
@@ -1126,7 +1126,7 @@ final_ridge_fit <-
     data = train_reduced
   )
 ```
-```{r Log Reg Ridge coefficents}
+```{r Log Reg Ridge coefficients}
 ridge_coef <-
   tidy(
     extract_fit_parsnip(final_ridge_fit)
@@ -1207,7 +1207,7 @@ final_elastic_fit <-
 ```
 
 
-```{r Log Reg elastic coefficents}
+```{r Log Reg elastic coefficients}
 elastic_coef <-
   tidy(
     extract_fit_parsnip(final_elastic_fit)
@@ -1244,7 +1244,7 @@ get_model_metrics(
   knitr::kable(digits = 4)
 ```
 
-Here we see that the model metrics show that, in terms of test metrics, all three of these models are roughly balanced. Elastic net based model does the best overall, with the highest ROC_AUC and the best balanced accuracy. That being said, these are the general metrics looking at *all* responses. We care about predicting whether or not a building will get damage, and damage is a rare class. Therefore, we should also consider the f_meas and sensitivity. In terms of sensitivity scores, the ridge regression does best, having the sensitvity of 0.9803. the other two models are tied at 0.9778, which is not that far off. In terms of f_meas, the elastic net and lasso are tied for the best at an f_meas of 0.9533. 
+Here we see that the model metrics show that, in terms of test metrics, all three of these models are roughly balanced. Elastic net based model does the best overall, with the highest ROC_AUC and the best balanced accuracy. That being said, these are the general metrics looking at *all* responses. We care about predicting whether or not a building will get damage, and damage is a rare class. Therefore, we should also consider the f_meas and sensitivity. In terms of sensitivity scores, the ridge regression does best, having the sensitivity of 0.9803. the other two models are tied at 0.9778, which is not that far off. In terms of f_meas, the elastic net and lasso are tied for the best at an f_meas of 0.9533. 
 
 Over all, these three differently trained models are very similar in terms of test performance, with the elastic model slightly winning out overall. 
 
@@ -1285,7 +1285,7 @@ library(discrim)
 set.seed(420)
 #covariance matrix got funky, making QDA not work
 #Looks like there was still enough multicollinearity to cause a crash
-#use PCA to tf correlated variables into orthoganal friends
+#use PCA to tf correlated variables into orthogonal friends
 ldaqda_recipe <- recipe(damaged ~ ., data = train_reduced) %>%
   step_dummy(all_nominal_predictors()) %>%
   step_normalize(all_numeric_predictors()) %>% 
@@ -1368,7 +1368,7 @@ QDA (with PCA assistance) performed a bit better than LDA. This makes sense as Q
 
 Now we will do a random forest model using ensemble methods, not for the purpose of feature selection, but for the purpose of modeling for real. 
 
-Random Forest models are exceptionally flexible non-parametic models that can easily capture nonlinear relationships and interaction effects. Our data contains just that, quite a bit of complex interaction effects and non-linear relationships. These variables may not be able to be captured by linear classification models such as ElasticNet Logistic Regression, LDA, and QDA models. Random Forest also doesn't require any additional assumptions like the first three either. The bagging process can also reduce the variance by training many decision trees on different bootstrap samples of the data and then averaging their predictions, which can help prevent overfitting and noisy variance. Random forest, however, does suffer from a lack of interpretability if the resulting tree is large and complex, but that can be resolved with calculating feature importance. 
+Random Forest models are exceptionally flexible non-parametric models that can easily capture nonlinear relationships and interaction effects. Our data contains just that, quite a bit of complex interaction effects and non-linear relationships. These variables may not be able to be captured by linear classification models such as ElasticNet Logistic Regression, LDA, and QDA models. Random Forest also doesn't require any additional assumptions like the first three either. The bagging process can also reduce the variance by training many decision trees on different bootstrap samples of the data and then averaging their predictions, which can help prevent overfitting and noisy variance. Random forest, however, does suffer from a lack of interpretability if the resulting tree is large and complex, but that can be resolved with calculating feature importance. 
 
 ```{r}
 library(tidymodels)
@@ -1427,9 +1427,9 @@ rf_grid <-
   )
 
 # Set up parallel processing to be machine agnostic
-# detect # of cores and subtract 1 so it doesnt crash
+# detect # of cores and subtract 1 so it doesn't crash
 # then split into n-1 R sessions to tune model then
-#turn off parallel procesing afterwards
+#turn off parallel processing afterwards
 n_cores <- max(1, detectCores() - 1)
 cl <- makePSOCKcluster(n_cores)
 registerDoParallel(cl)
