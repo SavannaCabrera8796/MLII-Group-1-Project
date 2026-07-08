@@ -1342,7 +1342,6 @@ qda_wf <- workflow() %>%
 qda_fit <- fit(qda_wf, data = train_reduced)
 ```
 
-Now that we fitted....
 
 ### Summary 
 
@@ -1512,6 +1511,3 @@ get_model_metrics(
   knitr::kable(digits = 4)
 
 ```
-
-## Next models: XGBoost, SVM, or KNN.
-SEC NOTE: our data is likely non-linear, highly collinear, and all messssyyyyy, I suspect tree-based methods like RF, XGBoost, and SVM would win out the most here. We could consider dropping LDA and/or QDA in favor of XGBoost (professor preferred), Random Forest, and SVM. 
