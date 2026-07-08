@@ -930,7 +930,7 @@ test_reduced <- test %>%
 
 After we removed hierarchical variables `geo_level_2_id` and `geo_level_3_id`, we selected variables that were most important and accounted for 90% of total importance in the data. This preserves most of the future model's predictive performance while simplifying model interpretation and workflow. Random Forest has yielded a more productive result for us than Lasso.
 
-# Phase \# 5 Helper Function Definitions
+# Phase \# 6 Helper Function Definitions
 
 We establish the set of metrics to evaluate each model against to maintain consistency and use helper functions to ensure accurate calculation against each model with minimal code redundancy.
 
