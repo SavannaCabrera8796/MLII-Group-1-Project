@@ -981,7 +981,8 @@ get_model_metrics <- function(fitted_model, model_name, new_data) {
 ```
 
 
-# Models
+# Phase \# 7 Model Implementation
+
 
 Now that we have a reduced feature list from our random forest model, we can now attempt to build models off of our new reduced data set, train_reduced. We break out models into 5 major sections; Logistic Regression, LDA, QDA, Random Forests with Ensemble Methods, and XGBoost. 
 
