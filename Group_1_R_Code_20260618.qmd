@@ -1030,7 +1030,7 @@ lasso_wf <-
   add_recipe(logistic_recipe) %>%
   add_model(lasso_spec)
 
-set.seed(42)
+set.seed(420)
 
 lasso_tuned <-
   tune_grid(
@@ -1092,7 +1092,7 @@ ridge_wf <-
   add_recipe(logistic_recipe) %>%
   add_model(ridge_spec)
 
-set.seed(42)
+set.seed(420)
 
 ridge_tuned <-
   tune_grid(
@@ -1379,7 +1379,7 @@ library(parallel)
 # Set seed
 set.seed(420)
 
-# RECETA
+# recipe
 
 rf_recipe <-
   recipe(damaged ~ ., data = train_reduced) %>%
