@@ -771,7 +771,11 @@ filter(estimate == 0)
 - Predictors retained: 89
 
 - Conclusion:\
-  LASSO provided little to no feature reduction implying most predictors appear to contain useful predictive information. Even when selecting a higher penalty value, such as 10\^-3, it resulted in minimal feature selection. We suspect this is because our data violates some of the assumptions of LASSO logistic regression; namely our sample size is much larger than our parameters, and many of our features are nested within one another and are not mutually exclusive. Because of this we will make a new attempt to determine feature importance using random forest models to perform feature selection.
+LASSO provided no feature reduction.  To optimize the L1 regularization penalty ($\lambda$), we performed a grid search over 10 levels ranging from $10^{10}$ to 1e-10 using cross-validation. The tuning process selected the minimum boundary penalty of $\lambda = 10^{-10}$ based on the maximum ROC AUC metric.
+ 
+Because this penalty is functionally zero, the model did not perform any feature selection, retaining all 89 predictors. This indicates that with our large sample size (n = 207,368), regularization was unnecessary to prevent overfitting, and the unconstrained coefficients provided the best predictive performance.
+ 
+Even when selecting a higher penalty value, such as $10^{-3}$ , it resulted in minimal feature selection. We suspect these results are due to our data violating the core linear and additive assumptions of LASSO. Specifically, many of our features are nested and not mutually exclusive, introducing complex interactions and dependencies that a standard linear penalty cannot effectively resolve.
 
 ## Attempt #2: Random Forest
 
