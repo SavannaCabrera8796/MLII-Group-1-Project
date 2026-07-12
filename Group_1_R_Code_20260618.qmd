@@ -781,7 +781,7 @@ Even when selecting a higher penalty value, such as $10^{-3}$ , it resulted in m
 
 For Random Forest, we chose permutation as our importance metric because it is model agnostic.
 
-```{r random forest}
+```{r random forest for feature selection}
 library(tidymodels)
 library(ranger)
 library(vip)
@@ -1056,6 +1056,7 @@ best_lasso <-
     metric = "roc_auc"
   )
 ```
+
 ```{r Fin WF}
 final_lasso_wf <-
   finalize_workflow(
@@ -1063,6 +1064,7 @@ final_lasso_wf <-
     best_lasso
   )
 ```
+
 ```{r FM}
 final_lasso_fit <-
   fit(
@@ -1070,6 +1072,7 @@ final_lasso_fit <-
     data = train_reduced
   )
 ```
+
 ```{r Review LASSO coefficients}
 lasso_coef <-
   tidy(
@@ -1106,6 +1109,7 @@ ridge_tuned <-
     metrics = metric_set(roc_auc, bal_accuracy)
   )
 ```
+
 ```{r Logistic Reg Ridge continued}
 # View tune results
 autoplot(ridge_tuned)
@@ -1131,6 +1135,7 @@ final_ridge_fit <-
     data = train_reduced
   )
 ```
+
 ```{r Log Reg Ridge coefficients}
 ridge_coef <-
   tidy(
@@ -1211,7 +1216,6 @@ final_elastic_fit <-
   )
 ```
 
-
 ```{r Log Reg elastic coefficients}
 elastic_coef <-
   tidy(
@@ -1222,7 +1226,6 @@ elastic_coef %>%
   filter(term != "(Intercept)") %>%
   arrange(desc(abs(estimate)))
 ```
-
 
 ### Summary
 
@@ -1254,7 +1257,6 @@ Here we see that the model metrics show that, in terms of test metrics, all thre
 Over all, these three differently trained models are very similar in terms of test performance, with the elastic model slightly winning out overall. 
 
 Let's check training metrics for any signs of overfitting:
-
 
 ```{r train metrics}
 get_model_metrics(
@@ -1310,6 +1312,7 @@ lda_fit <- fit(lda_wf, data = train_reduced)
 Note that LDA does not require tuning parameters.
 
 ### Summary
+
 ```{r LDA metrics}
 get_model_metrics(
   lda_fit,
@@ -1334,7 +1337,6 @@ We then turn to QDA for similar reasons as LDA. QDA is appropriate for this data
 
 By incorporating class-specific covariance matrices, QDA can capture more complex decision boundaries than LDA, potentially improving classification performance when the two damage categories are not well separated by a linear boundary. While QDA is somewhat less simple than LDA due to its quadratic decision boundary, it still provides useful insight into how predictor variables contribute to distinguishing between damage categories.
 
-
 ```{r QDA}
 qda_spec <- discrim_quad() %>%
   set_engine("MASS") %>%
@@ -1346,7 +1348,6 @@ qda_wf <- workflow() %>%
 
 qda_fit <- fit(qda_wf, data = train_reduced)
 ```
-
 
 ### Summary 
 
@@ -1372,7 +1373,7 @@ QDA (with PCA assistance) performed a bit better than LDA. This makes sense as Q
 
 Now we will do a random forest model using ensemble methods, not for the purpose of feature selection, but for the purpose of modeling for real. 
 
-Random Forest models are exceptionally flexible non-parametric models that can easily capture nonlinear relationships and interaction effects. Our data contains just that, quite a bit of complex interaction effects and non-linear relationships. These variables may not be able to be captured by linear classification models such as ElasticNet Logistic Regression, LDA, and QDA models. Random Forest also doesn't require any additional assumptions like the first three either. The bagging process can also reduce the variance by training many decision trees on different bootstrap samples of the data and then averaging their predictions, which can help prevent overfitting and noisy variance. Random forest, however, does suffer from a lack of interpretability if the resulting tree is large and complex, but that can be resolved with calculating feature importance. 
+Random Forest models are exceptionally flexible non-parametric models that can easily capture nonlinear relationships and interaction effects. Our data contains just that, quite a bit of complex interaction effects and non-linear relationships. These variables may not be able to be captured by linear classification models such as ElasticNet Logistic Regression, LDA, and QDA models. Random Forest also doesn't require any additional assumptions like the first three either. The bagging process can also reduce the variance by training many decision trees on different bootstrap samples of the data and then combining their predictions through majority voting for classification, which can help prevent overfitting and noisy variance. Random forest, however, does suffer from a lack of interpretability if the resulting tree is large and complex, but that can be resolved with calculating feature importance.
 
 ```{r random forest}
 library(tidymodels)
@@ -1467,7 +1468,7 @@ best_rf <-
 best_rf
 ```
 
-So it was determined that the best model parameters has an mtry value of 10 and a min_n of 16. Let's tune the final model:
+The above are the best model parameters for mtry and min_n. Let's tune the final model:
 
 ```{r best random forest}
 set.seed(420)
@@ -1516,3 +1517,24 @@ get_model_metrics(
   knitr::kable(digits = 4)
 
 ```
+
+Random Forest performed better than the other models, having both the highest ROC AUC, F-measure, and Kappa metrics. However, the difference between the training and testing ROC AUC suggests some potential overfitting with the model performing better on the tra
+
+### Consolidated Model Metrics
+
+Below we show the consolidated metrics across the models for both the reduced test and training sets. The highest values per test and train sets are denoted in bold.
+
+| Model | Dataset | Balanced Accuracy | Sensitivity | Specificity | F1 Measure | Kappa | ROC AUC |
+|-----------------|--------|--------|--------|--------|--------|--------|--------|
+| **L1 Logistic Regression (LASSO)** | Test | 0.6465 | 0.9778 | 0.3151 | 0.9533 | 0.3725 | 0.8897 |
+| **L1 Logistic Regression (LASSO)** | Train | 0.6543 | 0.9782 | 0.3305 | 0.9547 | 0.3894 | 0.8963 |
+| **L2 Logistic Regression (Ridge)** | Test | 0.6288 | 0.9803 | 0.2773 | 0.9527 | 0.3394 | 0.8889 |
+| **L2 Logistic Regression (Ridge)** | Train | 0.6382 | **0.9811** | 0.2952 | 0.9544 | 0.3615 | 0.8955 |
+| **Elastic Net Logistic Regression** | Test | 0.6469 | 0.9778 | 0.3161 | 0.9533 | 0.3733 | 0.8898 |
+| **Elastic Net Logistic Regression** | Train | 0.6546 | 0.9781 | 0.3310 | 0.9546 | 0.3897 | 0.8963 |
+| **LDA** | Test | 0.6928 | 0.9527 | 0.4330 | 0.9462 | 0.4088 | 0.8295 |
+| **LDA** | Train | 0.6992 | 0.9534 | 0.4449 | 0.9476 | 0.4202 | 0.8414 |
+| **QDA** | Test | **0.7469** | 0.9054 | **0.5884** | 0.9288 | 0.4087 | 0.8537 |
+| **QDA** | Train | **0.7513** | 0.9055 | **0.5971** | 0.9295 | 0.4127 | 0.8602 |
+| **Random Forest** | Test | 0.6762 | 0.9788 | 0.3736 | **0.9567** | **0.4358** | **0.9052** |
+| **Random Forest** | Train | 0.7419 | **0.9876** | 0.4962 | **0.9677** | **0.5851** | **0.9648** |
