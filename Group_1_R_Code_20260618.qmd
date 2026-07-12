@@ -290,7 +290,7 @@ height_boxplot <- ggplot(data_cleaned, aes(x = height_percentage)) +
 
   - To avoid issues with skewing the model due to the extreme age outliers, we will remove the rows that have age=995. 1,390 rows are removed, which is less than 1% of the data. See below.
 
-```{r}
+```{r remove age outliers}
 #remove the rows that have age=995 as outliers
 data_cleaned <- data_cleaned %>% 
   filter(age != 995)
@@ -333,7 +333,7 @@ As we can clearly see, we have relatively low correlation between each numerical
 - [Recommendation:]{.underline} Drop `count_floors_pre_eq`
 - To avoid issues with skewing the model due to highly correlated values, we drop the column below
 
-```{r}
+```{r drop count_floors_pre_eq}
 #remove the count_floors_pre_eq column keeping height_percentage because they are highly correlated
 data_cleaned <- select(data_cleaned, -count_floors_pre_eq)
 int_subset<-int_subset[-2]#removed count_floors_pre_eq since predictor has been dropped
@@ -731,7 +731,7 @@ final_lasso_fit <-
 
 Get coefficient estimates from the model at best penalty value
 
-```{r}
+```{r get best lasso values}
 coef_table <-
   tidy(
     extract_fit_parsnip(final_lasso_fit)
@@ -781,7 +781,7 @@ Even when selecting a higher penalty value, such as $10^{-3}$ , it resulted in m
 
 For Random Forest, we chose permutation as our importance metric because it is model agnostic.
 
-```{r}
+```{r random forest}
 library(tidymodels)
 library(ranger)
 library(vip)
@@ -849,7 +849,7 @@ Per our results, we see that `geo_level_1_id` dominates all other variables, fol
 
 Below we rerun random forest keeping ONLY `geo_level_1_id` in that training to assess the resulting feature importance.
 
-```{r}
+```{r random forest part two}
 #code from various documents/tutorials
 set.seed(420)
 # Recipe with useless variables removed
@@ -902,7 +902,7 @@ importance_tbl %>%
 
 We now extract the features that account for 90% of the cumulative importance and are left with these 15 features.
 
-```{r}
+```{r extract important features}
 importance_tbl <- importance_tbl %>%
   arrange(desc(Importance)) %>%
   mutate(
@@ -1285,7 +1285,7 @@ No real signs of overfitting, that's good!
 
 The next model we will attempt to run is Linear Discriminant Analysis (LDA). LDA can be helpful with this dataset after our preprocessing steps, turning the response variable into a binary variable as well as removing quite a few less-important variables. LDA can also be useful due to the fact that is looks at the mean differences between damage categories and the covariance matrix of the predictors to maximize separation between the two classes. It's also slightly more interpretable than an ElasticNet Logistic Regression model. However, LDA does come with a large caveat; it requires that predictors within each class follow a roughly normal distribution and share similar enough covariance matrices. We hope that our feature selection helps adhere to this assumption. 
 
-```{r}
+```{r LDA}
 library(discrim)
 set.seed(420)
 #covariance matrix got funky, making QDA not work
@@ -1310,7 +1310,7 @@ lda_fit <- fit(lda_wf, data = train_reduced)
 Note that LDA does not require tuning parameters.
 
 ### Summary
-```{r}
+```{r LDA metrics}
 get_model_metrics(
   lda_fit,
   "LDA",
@@ -1335,7 +1335,7 @@ We then turn to QDA for similar reasons as LDA. QDA is appropriate for this data
 By incorporating class-specific covariance matrices, QDA can capture more complex decision boundaries than LDA, potentially improving classification performance when the two damage categories are not well separated by a linear boundary. While QDA is somewhat less simple than LDA due to its quadratic decision boundary, it still provides useful insight into how predictor variables contribute to distinguishing between damage categories.
 
 
-```{r}
+```{r QDA}
 qda_spec <- discrim_quad() %>%
   set_engine("MASS") %>%
   set_mode("classification")
@@ -1350,7 +1350,7 @@ qda_fit <- fit(qda_wf, data = train_reduced)
 
 ### Summary 
 
-```{r}
+```{r QDA metrics}
 get_model_metrics(
   qda_fit,
   "QDA",
@@ -1374,7 +1374,7 @@ Now we will do a random forest model using ensemble methods, not for the purpose
 
 Random Forest models are exceptionally flexible non-parametric models that can easily capture nonlinear relationships and interaction effects. Our data contains just that, quite a bit of complex interaction effects and non-linear relationships. These variables may not be able to be captured by linear classification models such as ElasticNet Logistic Regression, LDA, and QDA models. Random Forest also doesn't require any additional assumptions like the first three either. The bagging process can also reduce the variance by training many decision trees on different bootstrap samples of the data and then averaging their predictions, which can help prevent overfitting and noisy variance. Random forest, however, does suffer from a lack of interpretability if the resulting tree is large and complex, but that can be resolved with calculating feature importance. 
 
-```{r}
+```{r random forest}
 library(tidymodels)
 library(ranger)
 library(doParallel)
@@ -1469,7 +1469,7 @@ best_rf
 
 So it was determined that the best model parameters has an mtry value of 10 and a min_n of 16. Let's tune the final model:
 
-```{r}
+```{r best random forest}
 set.seed(420)
 #now train final model
 #no need for permutation this time?
@@ -1500,7 +1500,7 @@ rf_fit <-
 
 And now we can check the test and train metrics:
 
-```{r}
+```{r random forest metrics}
 get_model_metrics(
   rf_fit,
   "Random Forest",
