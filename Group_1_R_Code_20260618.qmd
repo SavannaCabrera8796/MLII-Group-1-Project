@@ -1481,7 +1481,8 @@ rf_final <-
     min_n = best_rf$min_n
   ) %>%
   set_engine(
-    "ranger"
+    "ranger",
+    importance = "permutation"
   ) %>%
   set_mode("classification")
 
@@ -1520,24 +1521,7 @@ get_model_metrics(
 
 Random Forest performed better than the other models, having both the highest ROC AUC, F-measure, and Kappa metrics. However, the difference between the training and testing ROC AUC suggests some potential overfitting with the model performing better on the tra
 
-### Consolidated Model Metrics
-
-Below we show the consolidated metrics across the models for both the reduced test and training sets. The highest values per test and train sets are denoted in bold.
-
-| Model | Dataset | Balanced Accuracy | Sensitivity | Specificity | F1 Measure | Kappa | ROC AUC |
-|-----------------|--------|--------|--------|--------|--------|--------|--------|
-| **L1 Logistic Regression (LASSO)** | Test | 0.6465 | 0.9778 | 0.3151 | 0.9533 | 0.3725 | 0.8897 |
-| **L1 Logistic Regression (LASSO)** | Train | 0.6543 | 0.9782 | 0.3305 | 0.9547 | 0.3894 | 0.8963 |
-| **L2 Logistic Regression (Ridge)** | Test | 0.6288 | 0.9803 | 0.2773 | 0.9527 | 0.3394 | 0.8889 |
-| **L2 Logistic Regression (Ridge)** | Train | 0.6382 | **0.9811** | 0.2952 | 0.9544 | 0.3615 | 0.8955 |
-| **Elastic Net Logistic Regression** | Test | 0.6469 | 0.9778 | 0.3161 | 0.9533 | 0.3733 | 0.8898 |
-| **Elastic Net Logistic Regression** | Train | 0.6546 | 0.9781 | 0.3310 | 0.9546 | 0.3897 | 0.8963 |
-| **LDA** | Test | 0.6928 | 0.9527 | 0.4330 | 0.9462 | 0.4088 | 0.8295 |
-| **LDA** | Train | 0.6992 | 0.9534 | 0.4449 | 0.9476 | 0.4202 | 0.8414 |
-| **QDA** | Test | **0.7469** | 0.9054 | **0.5884** | 0.9288 | 0.4087 | 0.8537 |
-| **QDA** | Train | **0.7513** | 0.9055 | **0.5971** | 0.9295 | 0.4127 | 0.8602 |
-| **Random Forest** | Test | 0.6762 | 0.9788 | 0.3736 | **0.9567** | **0.4358** | **0.9052** |
-| **Random Forest** | Train | 0.7419 | **0.9876** | 0.4962 | **0.9677** | **0.5851** | **0.9648** |
+## XGBoost
 
 ```{r xgboost}
 # specfy model
@@ -1636,7 +1620,142 @@ get_model_metrics(
   knitr::kable(digits = 4)
 ```
 
-# XGBoost performed very well on this dataset ie, after tuning the number of trees, tree depth, and learning rate, the model achieved a test ROC AUC of 0.9046, making it one of the best-performing models. 
-# Its balanced accuracy 0.6696 and Kappa 0.4247 were also similar to the Random Forest model
-# The training and testing metrics were close, which I think means only a small amount of overfitting
-# Overall, XGBoost was a strong model, but its performance was nearly identical to Random Forest.
+### Summary
+
+- XGBoost performed very well on this dataset ie, after tuning the number of trees, tree depth, and learning rate, the model achieved a test ROC AUC of 0.9046, making it one of the best-performing models. 
+- Its balanced accuracy 0.6696 and Kappa 0.4247 were also similar to the Random Forest model
+- The training and testing metrics were close, which I think means only a small amount of overfitting
+- Overall, XGBoost was a strong model, but its performance was nearly identical to Random Forest.
+
+## Consolidated Model Metrics
+
+Below we show the consolidated metrics across the models for both the reduced test and training sets. The highest values per test and train sets are denoted in bold.
+
+| Model | Dataset | Balanced Accuracy | Sensitivity | Specificity | F1 Measure | Kappa | ROC AUC |
+|-----------------|--------|--------|--------|--------|--------|--------|--------|
+| **L1 Logistic Regression (LASSO)** | Test | 0.6465 | 0.9778 | 0.3151 | 0.9533 | 0.3725 | 0.8897 |
+| **L1 Logistic Regression (LASSO)** | Train | 0.6543 | 0.9782 | 0.3305 | 0.9547 | 0.3894 | 0.8963 |
+| **L2 Logistic Regression (Ridge)** | Test | 0.6288 | 0.9803 | 0.2773 | 0.9527 | 0.3394 | 0.8889 |
+| **L2 Logistic Regression (Ridge)** | Train | 0.6382 | 0.9811 | 0.2952 | 0.9544 | 0.3615 | 0.8955 |
+| **Elastic Net Logistic Regression** | Test | 0.6469 | 0.9778 | 0.3161 | 0.9533 | 0.3733 | 0.8898 |
+| **Elastic Net Logistic Regression** | Train | 0.6546 | 0.9781 | 0.3310 | 0.9546 | 0.3897 | 0.8963 |
+| **LDA** | Test | 0.6928 | 0.9527 | 0.4330 | 0.9462 | 0.4088 | 0.8295 |
+| **LDA** | Train | 0.6992 | 0.9534 | 0.4449 | 0.9476 | 0.4202 | 0.8414 |
+| **QDA** | Test | 0.7469 | 0.9054 | 0.5884 | 0.9288 | 0.4087 | 0.8537 |
+| **QDA** | Train | 0.7513 | 0.9055 | 0.5971 | 0.9295 | 0.4127 | 0.8602 |
+| **Random Forest** | Test | 0.6762 | 0.9788 | 0.3736 | 0.9567 | 0.4358 | 0.9052 |
+| **Random Forest** | Train | 0.7419 | 0.9876 | 0.4962 | 0.9677 | 0.5851 | 0.9648 |
+| **XGBoost** | Test | 0.6696 | 0.9796 | 0.3595 | 0.9564 | 0.4247| 0.9046 |
+| **XGBoost** | Train | 0.6911 | 0.9823 | 0.3999 | 0.9602 | 0.4742 | 0.9243 |
+
+# Phase \# 8 Model Summary
+
+Although QDA achieved the highest balanced accuracy score of 0.7469, this study cares the most about accurately identifying buildings that will sustain damage. The random forest classifier achieved one of the highest sensitivities (the majority class was damaged buildings) of 0.979, indicating its amazing ability to find damage buildings. It also contains the highest F1 score (0.9567), ROC-AUC (0.9052), and kappa (0.4358). Therefore, the champion model here is the **random forest model**. 
+
+The following provides more information about the champion model, Random Forest:
+
+
+```{r}
+#extract ranger model
+rf_engine <-
+  extract_fit_engine(rf_fit)
+
+#plot variable importance
+vip(rf_engine,
+    num_features = 15)
+
+```
+
+We will also make the partial dependency plot of some of our top variables:
+
+
+```{r}
+library(DALEXtra)
+library(ggplot2)
+library(patchwork)
+library(dplyr)
+
+# Sample data for speed
+set.seed(420)
+pdp_data <- train_reduced %>%
+  sample_n(5000)
+#remove response variable
+pdp_x <- pdp_data %>%
+  select(-damaged)
+
+pdp_y <- ifelse(
+  pdp_data$damaged == "Yes",
+  1,
+  0)
+
+# Prediction function, Returns probability of damage = Yes
+predict_damage <- function(model, newdata) {
+  predict(
+    model,
+    new_data = newdata,
+    type = "prob"
+  )$.pred_Yes
+}
+
+# Create DALEXtra explainer
+rf_explainer <- explain_tidymodels(
+  model = rf_fit,
+  data = pdp_x,
+  y = pdp_y,
+  predict_function = predict_damage,
+  label = "Random Forest",
+  verbose = FALSE
+)
+
+# Partial Dependence Calculations
+foundation_profile <- model_profile(
+  rf_explainer,
+  variables = "foundation_type")
+
+mud_profile <- model_profile(
+  rf_explainer,
+  variables = "has_superstructure_mud_mortar_stone")
+
+height_profile <- model_profile(
+  rf_explainer,
+  variables = "height_percentage")
+
+age_profile <- model_profile(
+  rf_explainer,
+  variables = "age")
+
+# Plot PDPs
+p1 <- plot(foundation_profile) +
+  ggtitle("Partial Dependence: Foundation Type") +
+  ylab("Probability of Building Damage") +
+  theme_minimal()
+
+
+p2 <- plot(mud_profile) +
+  ggtitle("Partial Dependence: Mud Mortar Stone Superstructure") +
+  ylab("Probability of Building Damage") +
+  theme_minimal()
+
+
+p3 <- plot(height_profile) +
+  ggtitle("Partial Dependence: Height Percentage") +
+  ylab("Probability of Building Damage") +
+  theme_minimal()
+
+
+p4 <- plot(age_profile) +
+  ggtitle("Partial Dependence: Building Age") +
+  ylab("Probability of Building Damage") +
+  theme_minimal()
+
+# Combine plots
+p1 + p2 + p3 + p4
+```
+
+Note, I had to use DALEXtra to make partial dependence plots due to the use of tidyverse workflows. It provides the explain_tidymodels() function that would create an object that we can then use the random forest ranger output to create those partial dependence plots. Source for helping us understand a complex predictive RF model: https://arxiv.org/abs/1806.08915
+
+This is what the partial dependence plots show us:
+- Foundation Type: buildings with foundation type 'r' have the highest predicted probability of damage, while h has the smallest.
+- Has a Mud/Mortar/Stone Superstructure: Buildings made with this material are more likely to have damage.
+- Height Percentage: Very short buildings have slightly lower predicted damage, while moderate height percentage are associated with increased predicted damage. Taller buildings have little effect, perhaps due to more modern building techniques.
+- Age: Very young buildings have lower damage probability than buildings around 30-70 years. Interestingly, as the buildings get older and older, their predicted probabilities slowly decrease towards 0.90. 
