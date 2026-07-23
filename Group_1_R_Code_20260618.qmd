@@ -1583,8 +1583,8 @@ final_xgb_wf <-
     best_xgb
   )
 ```
-```{r xgboost} fit to train reduced
-#fit 
+```{r xgboost fit to train reduced}
+# fit to train reduced 
 final_xgb_fit <-
   fit(
     final_xgb_wf,
