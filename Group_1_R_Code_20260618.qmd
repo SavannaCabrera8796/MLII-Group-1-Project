@@ -1512,7 +1512,7 @@ Random Forest performed better than the other models, having both the highest RO
 
 ## XGBoost
 
-```{r xgboost}
+```{r xgboost tree}
 # specfy model
 library(xgboost)
 
@@ -1528,7 +1528,7 @@ xgb_spec <-
   set_mode("classification")
 ```
 
-```{r xgboost}
+```{r xgboost workflow}
 # wf
 xgb_wf <-
   workflow() %>%
@@ -1536,7 +1536,7 @@ xgb_wf <-
   add_model(xgb_spec)
 ```
 
-```{r xgboost}
+```{r xgboost grid}
 # grid
 xgb_grid <-
   grid_latin_hypercube(
@@ -1546,7 +1546,7 @@ xgb_grid <-
     size = 15
   )
 ```
-```{r xgboost}
+```{r xgboost tuning}
 #tune
 set.seed(420)
 
@@ -1562,10 +1562,10 @@ xgb_tuned <-
   )
 ```
 
-```{r xgboost}
+```{r xgboost plot}
 autoplot(xgb_tuned)
 ```
-```{r xgboost}
+```{r xgboost select best}
 #select best
 best_xgb <-
   select_best(
@@ -1575,7 +1575,7 @@ best_xgb <-
 
 best_xgb
 ```
-```{r xgboost}
+```{r xgboost finalize with best}
 # final
 final_xgb_wf <-
   finalize_workflow(
@@ -1583,7 +1583,7 @@ final_xgb_wf <-
     best_xgb
   )
 ```
-```{r xgboost}
+```{r xgboost} fit to train reduced
 #fit 
 final_xgb_fit <-
   fit(
@@ -1592,7 +1592,7 @@ final_xgb_fit <-
   )
 ```
 
-```{r xgboost}
+```{r xgboost get metrics}
 #metric
 get_model_metrics(
   final_xgb_fit,
