@@ -950,21 +950,50 @@ class_metrics<- metric_set(roc_auc, bal_accuracy, sens, spec, f_meas, kap)
 #pass fitted model using best parameters + model name
 #function will predict against test data
 get_model_preds <- function(fitted_model, model_name, new_data) {
-  augment(fitted_model, new_data = new_data) ## !!!IMPORTANT" <- if we are going to train against train_reduced than this line needs to be changed to new_data=test_reduced. right now it say test because both RF and Lasso were trained against train in full
+  augment(fitted_model, new_data = new_data) ## !!!IMPORTANT" <- train against correct data set
 }
 
 #separate visuals out for organization
-get_model_plots <- function(aug_data, model_name) {
-  roc_plot<-aug_data |>
+#plot = TRUE for all individual graphs 
+#plot = False for consolidated call to make it easier to overlay
+get_model_plots <- function(aug_data, model_name, plot=TRUE) {
+  roc_data<-aug_data |>
     roc_curve(truth = damaged, .pred_Yes) |>
-    autoplot() +
+  mutate(model_name = model_name)
+
+  if(plot==TRUE){ #plot the individual results for each model
+     p <- ggplot(
+      roc_data,
+      aes(x = 1 - specificity, y = sensitivity, color = model_name)
+    ) +
+      geom_path(
+        linewidth = 1
+      ) +
+      geom_abline(
+        intercept = 0,
+        slope = 1,
+        linetype = "dashed",
+        color = "gray60"
+      ) +
+      coord_equal() +
     labs(
-      title = paste0(model_name, " ROC Curve"),
+        title = paste(model_name, "ROC Curve"),
       x = "False Positive Rate",
       y = "True Positive Rate"
-    )
-}
+      ) +
+      theme_minimal(base_size = 13) +
+      theme(
+        plot.title = element_text(face = "bold", hjust = 0.5),
+        axis.title = element_text(face = "bold"),
+        panel.grid.minor = element_blank(),
+        legend.position = "none"
+      )
 
+    print(p)
+  }
+    #return the data for binding into overlaid graph
+    return(roc_data |> mutate(model_name = model_name)) 
+}
 
 get_model_metrics <- function(fitted_model, model_name, new_data) {
 
@@ -979,7 +1008,7 @@ get_model_metrics <- function(fitted_model, model_name, new_data) {
     pivot_wider(names_from = .metric, values_from = .estimate)
    
    #show graphics
-   print(get_model_plots(aug_data, model_name)) 
+   get_model_plots(aug_data, model_name)
    return(metrics_results)
 }
 ```
@@ -1230,25 +1259,28 @@ elastic_coef %>%
 ### Summary
 
 ```{r test metrics}
-get_model_metrics(
+lasso_test_metrics <-  get_model_metrics(
   final_lasso_fit,
-  "L1 Log Regression -LASSO",
+  "L1 Log Regression -LASSO (test) ",
   test_reduced
-) |>
+) 
+lasso_test_metrics |>
   knitr::kable(digits = 4)
 
-get_model_metrics(
+ridge_test_metrics <-get_model_metrics(
   final_ridge_fit,
-  "L2 Log Reg - Ridge",
+  "L2 Log Reg - Ridge (test) ",
   test_reduced
-) |>
+) 
+ridge_test_metrics |>
   knitr::kable(digits = 4)
 
-get_model_metrics(
+elastic_test_metrics <-get_model_metrics(
   final_elastic_fit,
-  "L1+L2 Log Reg - Elastic",
+  "L1+L2 Log Reg - Elastic (test) ",
   test_reduced
-) |>
+) 
+elastic_test_metrics|>
   knitr::kable(digits = 4)
 ```
 
@@ -1259,25 +1291,28 @@ Over all, these three differently trained models are very similar in terms of te
 Let's check training metrics for any signs of overfitting:
 
 ```{r train metrics}
-get_model_metrics(
+lasso_train_metrics <- get_model_metrics(
   final_lasso_fit,
-  "L1 Log Regression -LASSO",
+  "L1 Log Regression -LASSO (train)",
   train_reduced
-) |>
+) 
+lasso_train_metrics |>
   knitr::kable(digits = 4)
 
-get_model_metrics(
+ridge_train_metrics <- get_model_metrics(
   final_ridge_fit,
-  "L2 Log Reg - Ridge",
+  "L2 Log Reg - Ridge (train)",
   train_reduced
-) |>
+) 
+ridge_train_metrics |>
   knitr::kable(digits = 4)
 
-get_model_metrics(
+elastic_train_metrics <- get_model_metrics(
   final_elastic_fit,
-  "L1+L2 Log Reg - Elastic",
+  "L1+L2 Log Reg - Elastic (train)",
   train_reduced
-) |>
+) 
+elastic_train_metrics |>
   knitr::kable(digits = 4)
 ```
 
@@ -1314,18 +1349,20 @@ Note that LDA does not require tuning parameters.
 ### Summary
 
 ```{r LDA metrics}
-get_model_metrics(
+lda_test_metrics <- get_model_metrics(
   lda_fit,
-  "LDA",
+  "LDA (test)",
   test_reduced
-) |>
+) 
+lda_test_metrics|>
   knitr::kable(digits = 4)
 
-get_model_metrics(
+lda_train_metrics <- get_model_metrics(
   lda_fit,
-  "LDA",
+  "LDA (train)",
   train_reduced
-) |>
+)
+lda_train_metrics |>
   knitr::kable(digits = 4)
 ```
 
@@ -1352,18 +1389,21 @@ qda_fit <- fit(qda_wf, data = train_reduced)
 ### Summary 
 
 ```{r QDA metrics}
-get_model_metrics(
+qda_test_metrics<- get_model_metrics(
   qda_fit,
-  "QDA",
+  "QDA (test)",
   test_reduced
-) |>
+) 
+qda_test_metrics|>
   knitr::kable(digits = 4)
 
-get_model_metrics(
+qda_train_metrics <- get_model_metrics(
   qda_fit,
-  "QDA",
+  "QDA (train)",
   train_reduced
-) |>
+) 
+
+qda_train_metrics|>
   knitr::kable(digits = 4)
 ```
 
@@ -1492,18 +1532,20 @@ rf_fit <-
 And now we can check the test and train metrics:
 
 ```{r random forest metrics}
-get_model_metrics(
+rf_test_metrics <- get_model_metrics(
   rf_fit,
-  "Random Forest",
+  "Random Forest (test)",
   test_reduced
-) |>
+) 
+rf_test_metrics|>
   knitr::kable(digits = 4)
 
-get_model_metrics(
+rf_train_metrics <- get_model_metrics(
   rf_fit,
-  "Random Forest",
+  "Random Forest (train)",
   train_reduced
-) |>
+) 
+rf_train_metrics|>
   knitr::kable(digits = 4)
 
 ```
@@ -1513,7 +1555,7 @@ Random Forest performed better than the other models, having both the highest RO
 ## XGBoost
 
 ```{r xgboost tree}
-# specfy model
+# specify model
 library(xgboost)
 
 set.seed(420)
@@ -1594,18 +1636,20 @@ final_xgb_fit <-
 
 ```{r xgboost get metrics}
 #metric
-get_model_metrics(
+xgb_test_metrics <- get_model_metrics(
   final_xgb_fit,
-  "XGBoost",
+  "XGBoost (test)",
   test_reduced
-) |>
+) 
+xgb_test_metrics|>
   knitr::kable(digits = 4)
 
-get_model_metrics(
+xgb_train_metrics <- get_model_metrics(
   final_xgb_fit,
-  "XGBoost",
+  "XGBoost (train)",
   train_reduced
-) |>
+) 
+xgb_train_metrics|>
   knitr::kable(digits = 4)
 ```
 
@@ -1618,25 +1662,54 @@ get_model_metrics(
 
 ## Consolidated Model Metrics
 
-Below we show the consolidated metrics across the models for both the reduced test and training sets. The highest values per test and train sets are denoted in bold.
+Below we show the consolidated metrics across the models for both the reduced test and training sets. 
 
-| Model | Dataset | Balanced Accuracy | Sensitivity | Specificity | F1 Measure | Kappa | ROC AUC |
-|-----------------|--------|--------|--------|--------|--------|--------|--------|
-| **L1 Logistic Regression (LASSO)**  | Test | 0.6465 | 0.9778 | 0.3151 | 0.9533 | 0.3725 | 0.8897 |
-| **L1 Logistic Regression (LASSO)**  | Train| 0.6543 | 0.9782 | 0.3305 | 0.9547 | 0.3894 | 0.8963 |
-| **L2 Logistic Regression (Ridge)**  | Test | 0.6288 | 0.9803 | 0.2773 | 0.9527 | 0.3394 | 0.8889 |
-| **L2 Logistic Regression (Ridge)**  | Train | 0.6382 | 0.9811 | 0.2952 | 0.9544 | 0.3615 | 0.8955 |
-| **Elastic Net Logistic Regression** | Test | 0.6469 | 0.9778 | 0.3161 | 0.9533 | 0.3733 | 0.8898 |
-| **Elastic Net Logistic Regression** | Train | 0.6546 | 0.9781 | 0.3310 | 0.9546 | 0.3897 | 0.8963 |
-| **LDA**                             | Test | 0.6928 | 0.9527 | 0.4330 | 0.9462 | 0.4088 | 0.8295 |
-| **LDA**                             | Train | 0.6992 | 0.9534 | 0.4449 | 0.9476 | 0.4202 | 0.8414 |
-| **QDA**                             | Test | 0.7469 | 0.9054 | 0.5884 | 0.9288 | 0.4087 | 0.8537 |
-| **QDA**                             | Train | 0.7513 | 0.9055 | 0.5971 | 0.9295 | 0.4127 | 0.8602 |
-| **Random Forest**                   | Test | 0.6757| 0.9797| 0.3716| 0.9571| 0.4372| 0.9062|
-| **Random Forest**                   | Train | 0.7265| 0.9869| 0.4661| 0.9658| 0.5546|  0.959|
-| **XGBoost**                         | Test | 0.6696| 0.9796| 0.3595| 0.9564| 0.4247|  0.9046|
-| **XGBoost**                         | Train | 0.6911| 0.9823| 0.3999| 0.9602| 0.4742|  0.9243|
+```{r}
+model_summary_table <- bind_rows(
+  lasso_test_metrics,
+  lasso_train_metrics,
+  ridge_test_metrics,
+  ridge_train_metrics,
+  elastic_test_metrics,
+  elastic_train_metrics,
+  lda_test_metrics,
+  lda_train_metrics,
+  qda_test_metrics,
+  qda_train_metrics,
+  rf_test_metrics,
+  rf_train_metrics,
+  xgb_test_metrics,
+  xgb_train_metrics)
 
+  model_summary_table |>
+  knitr::kable(digits = 4)
+```
+
+```{r}
+roc_summary_overlay<- bind_rows(
+  get_model_plots(aug_data = get_model_preds(final_lasso_fit, "L1 Log Regression -LASSO (test)", test_reduced), model_name = "L1 Log Regression -LASSO (test)", plot=FALSE),
+  get_model_plots(aug_data = get_model_preds(final_ridge_fit, "L2 Log Reg - Ridge (test)", test_reduced), model_name = "L2 Log Reg - Ridge (test)", plot=FALSE),
+  get_model_plots(aug_data = get_model_preds(final_elastic_fit, "L1+L2 Log Reg - Elastic (test)", test_reduced), model_name = "L1+L2 Log Reg - Elastic (test)", plot=FALSE),
+  get_model_plots(aug_data = get_model_preds(lda_fit, "LDA (test)", test_reduced), model_name = "LDA (test)", plot=FALSE),
+  get_model_plots(aug_data = get_model_preds(qda_fit, "QDA (test)", test_reduced), model_name = "QDA (test)", plot=FALSE),
+  get_model_plots(aug_data = get_model_preds(rf_fit, "Random Forest (test)", test_reduced), model_name = "Random Forest (test)", plot=FALSE),
+  get_model_plots(aug_data = get_model_preds(final_xgb_fit, "XGBoost (test)", test_reduced), model_name = "XGBoost (test)", plot=FALSE)
+) 
+
+#color-coded ROC AUC overlay plot with legend
+ggplot(
+roc_summary_overlay, aes(x = 1 - specificity, y = sensitivity, color = model_name)) +
+  geom_line(size = 1) +
+  geom_abline(linetype = "dashed", color = "gray") +
+  labs(
+    title = "ROC Curves for All Models",
+    x = "False Positive Rate (1 - Specificity)",
+    y = "True Positive Rate (Sensitivity)",
+    color = "Model"
+  ) +
+  theme_minimal()
+
+```
 
 # Phase \# 8 Model Summary
 
@@ -1698,6 +1771,10 @@ rf_explainer <- explain_tidymodels(
 )
 
 # Partial Dependence Calculations
+geo_profile <- model_profile(
+  rf_explainer,
+  variables = "geo_level_1_id")
+
 foundation_profile <- model_profile(
   rf_explainer,
   variables = "foundation_type")
@@ -1715,6 +1792,11 @@ age_profile <- model_profile(
   variables = "age")
 
 # Plot PDPs
+p0 <- plot(geo_profile) +
+  ggtitle("Partial Dependence: Geo Level 1 ID") +
+  ylab("Probability of Building Damage") +
+  theme_minimal()
+
 p1 <- plot(foundation_profile) +
   ggtitle("Partial Dependence: Foundation Type") +
   ylab("Probability of Building Damage") +
@@ -1739,7 +1821,7 @@ p4 <- plot(age_profile) +
   theme_minimal()
 
 # Combine plots
-p1 + p2 + p3 + p4
+p0 + p1 + p2 + p3 + p4
 ```
 
 Note, I had to use DALEXtra to make partial dependence plots due to the use of tidyverse workflows. It provides the explain_tidymodels() function that would create an object that we can then use the random forest ranger output to create those partial dependence plots. Source for helping us understand a complex predictive RF model: https://arxiv.org/abs/1806.08915
