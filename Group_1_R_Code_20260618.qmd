@@ -1,5 +1,5 @@
 ---
-title: "Group 1 Project - Ritcher"
+title: "Group 1 Project - Richter"
 format: html
 ---
 
@@ -137,7 +137,7 @@ data_cleaned <- data_cleaned %>%
     across(all_of(binary_vars), as.factor))
 ```
 
-## Finding and Dealing with NAs
+## Finding and Dealing with N/As
 
 There does not appear to be any N/As or values that would indicate N/As, but we double check that with code below
 
@@ -146,7 +146,7 @@ na_cols<-colSums(is.na(data_cleaned))
 na_cols[na_cols>0] %>% sum()
 ```
 
-We confirmed that there are no NAs and now we check for duplicates.
+We confirmed that there are no N/As and now we check for duplicates.
 
 ```{r check for dupes}
 # Duplicate rows
@@ -155,7 +155,7 @@ data_cleaned %>%
   sum()
 ```
 
-We have no NAs and no duplicates so no action is required here.
+We have no N/As and no duplicates so no action is required here.
 
 ## Dropping Unnecessary Columns
 
@@ -169,7 +169,7 @@ data_cleaned <- data_cleaned %>%
 
 ## Summary of Initial Data Wrangling
 
-We uploaded the two CSV files, performed a left join on `building_id` and saved the new joined data into a dataframe. We then ensured that the joined data, then called **`raw_data`**, had all the variables in the correct format. We also confirmed there were no NAs or duplicates. The current main dataframe with necessary transformations applied to be used for subsequent steps is called **`data_cleaned`**.
+We uploaded the two CSV files, performed a left join on `building_id` and saved the new joined data into a dataframe. We then ensured that the joined data, then called **`raw_data`**, had all the variables in the correct format. We also confirmed that there were no NAs or duplicates. The current main dataframe with necessary transformations applied to be used for subsequent steps is called **`data_cleaned`**.
 
 # Phase 2: Exploratory Data Analysis (EDA)
 
@@ -298,7 +298,7 @@ data_cleaned <- data_cleaned %>%
 
 - `area_percentage` - This is the normalized area of the building's footprint. This data seems to be already transformed to be roughly normal to very moderately right-skewed. Most values are less than 100 units (probably meters). Mean is 8.018 with median being slightly lower at
 
-  - [Recommendation:]{.underline} Log transform.
+  - [Recommendation:]{.underline} Assess if log transform is needed.
 
 - `count_families` - This is a distinct variables that counts the amount of families that lived in the building. Most of these values hover at around 1 to 2 families in a building, with some buildings being unoccupied by families. There are some buildings that hold more families, but these are likely outliers, as they don't even show up on the histogram. Mean and median are roughly equal with a mean of 0.9839 and a median of 1.
 
@@ -310,7 +310,7 @@ data_cleaned <- data_cleaned %>%
 
 - `height_percentage` - Here we see the normalized height of a building's footprint. We can clearly see that the normalization worked, as the histogram is roughly in a normal with a moderate skew. The mean is roughly 5.424 while the median is 5.
 
-  - [Recommendation:]{.underline} Log Transform
+  - [Recommendation:]{.underline} Assess if log transform is needed.
 
 ## Numerical Data Correlation Matrix
 
@@ -341,7 +341,7 @@ int_subset<-int_subset[-2]#removed count_floors_pre_eq since predictor has been 
 
 ### Numerical Values and `damage_grade`
 
-When we parse out the numerical predictors across damage grades, we see that `area_percentage`, `count_families`, and `age` so not differ radically from one another.
+When we parse out the numerical predictors across damage grades, we see that `area_percentage`, `count_families`, and `age` do not differ radically from one another.
 
 However, we do see differences in `height_percentage`. It appears that the overall height of the building matters when predicting its level of destruction in the earthquake. This could be an important predictor!
 
@@ -467,7 +467,7 @@ cat_plot_grid
 
 - `plan_configuration` - Plan configuration sees some variation. It's not as extreme as foundation type or roof type, but variation is most noticeable with the low damage grades and highest damage grades.
 
-- `legal_ownership_status` - Legal ownership status DOES see some differences among the groups. Namely that ownership type 'a' saw the highest proportion of level 1 damage while ownership type 'w' saw the least. This could be another important variable.
+- `legal_ownership_status` - Legal ownership status does see some differences among the groups. Namely that ownership type 'a' saw the highest proportion of level 1 damage while ownership type 'w' saw the least. This could be another important variable.
 
 - [Recommendation:]{.underline} No action to be taken on categorical variables yet.
 
@@ -571,7 +571,7 @@ After performing EDA and considering different model approaches, we've decided t
 
 - **damaged**: No for damage_grade=1 (low damage)
 
-Below we see the new predictor and its distribution and still must strongly plan for class imbalance.
+Below we see the new predictor and its distribution and still must account for class imbalance.
 
 ```{r add new damaged indicator and plot distribution}
 data_cleaned <- data_cleaned |>
@@ -618,7 +618,7 @@ resamples <- vfold_cv(train, v = 5, strata = damaged)
 
 ## Attempt #1: Lasso
 
-As part of our attempt at using Lasso to reduce our feature set, we address the high cardinality of geo levels by grouping the rare categories of `geo_level_2_id` and `geo_level_3_id` which occur less than 1% into an "other" category. We take other preprocessing steps such as converting all categorical values to dummy numerics, removing any predictors that due not explain variance in the model, and normalizing all numeric predictors.
+As part of our attempt at using Lasso to reduce our feature set, we address the high cardinality of geo levels by grouping the rare categories of `geo_level_2_id` and `geo_level_3_id` which occur less than 1% into an "other" category. We take other preprocessing steps such as converting all categorical values to dummy numerics, removing any predictors that do not explain variance in the model, and normalizing all numeric predictors.
 
 ```{r lasso recipe prep}
 # groups geographic levels together before dummy encoding
@@ -921,6 +921,7 @@ selected_features <- c(
     pull(Variable)
 )
 selected_features <- unique(selected_features)
+selected_features
 
 train_reduced <- train %>%
   select(any_of(selected_features), damaged)
@@ -932,7 +933,7 @@ test_reduced <- test %>%
 
 ### Random Forest Feature Selection Results
 
-After we removed hierarchical variables `geo_level_2_id` and `geo_level_3_id`, we selected variables that were most important and accounted for 90% of total importance in the data. This preserves most of the future model's predictive performance while simplifying model interpretation and workflow. Random Forest has yielded a more productive result for us than Lasso.
+After we removed hierarchical variables `geo_level_2_id` and `geo_level_3_id`, we selected variables that were most important and accounted for 90% of total importance in the data. This preserves most of the future models' predictive performance while simplifying model interpretation and workflow. Random Forest has yielded a more productive result for us than Lasso.
 
 # Phase \# 6 Helper Function Definitions
 
@@ -1021,7 +1022,7 @@ Now that we have a reduced feature list from our random forest model, we can now
 
 ## Logistic Regression with L1 (LASSO) and L2 (Ridge) Regularization
 
-We will start this analysis in threes, one with pure lasso (after feature selection), one with pure ridge, and one with a mix of both, which is an elasticnet model. 
+We will analyze this section in three parts: one with pure lasso (after feature selection), one with pure ridge, and one with a mix of both, which is an elasticnet model. 
 
 We chose a logistic regression model due to the fact our preprocessing steps combined some response classes into a binary classification problem, making logistic regression an appropriate choice. An Elasticnet Logistic Regression model is especially helpful here as it combines L1 and L2 regularization, allowing it to perform additional coefficient shrinkage and feature selection while also maintaining model performance when predictors are correlated. This is especially important because we still have some correlated variables after feature selection, this dataset is full of such variables. 
 
@@ -1178,7 +1179,7 @@ ridge_coef %>%
 
 ### L1 and L2 (ElasticNet)
 
-Sources for running this code in a semi-speedy manner can be found in this documentation: https://tune.tidymodels.org/reference/control_bayes.html and https://tune.tidymodels.org/reference/tune_bayes.html
+Sources for running this code in a relatively fast manner can be found in this documentation: https://tune.tidymodels.org/reference/control_bayes.html and https://tune.tidymodels.org/reference/tune_bayes.html
 
 ```{r elastic log reg}
 set.seed(420)
@@ -1284,7 +1285,7 @@ elastic_test_metrics|>
   knitr::kable(digits = 4)
 ```
 
-Here we see that the model metrics show that, in terms of test metrics, all three of these models are roughly balanced. Elastic net based model does the best overall, with the highest ROC_AUC and the best balanced accuracy. That being said, these are the general metrics looking at *all* responses. We care about predicting whether or not a building will get damage, and damage is a rare class. Therefore, we should also consider the f_meas and sensitivity. In terms of sensitivity scores, the ridge regression does best, having the sensitivity of 0.9803. the other two models are tied at 0.9778, which is not that far off. In terms of f_meas, the elastic net and lasso are tied for the best at an f_meas of 0.9533. 
+The model metrics show that, in terms of test metrics, all three of these models are roughly balanced. Elastic net based model does the best overall, with the highest ROC_AUC and the best balanced accuracy. That being said, these are the general metrics looking at *all* responses. We care about predicting whether or not a building will be damaged, and damaged is a rare class. Therefore, we should also consider the f_meas and sensitivity. In terms of sensitivity scores, the ridge regression does best, having the sensitivity of 0.9803. the other two models are tied at 0.9778, which is not that far off. In terms of f_meas, the elastic net and lasso are tied for the best at an f_meas of 0.9533. 
 
 Over all, these three differently trained models are very similar in terms of test performance, with the elastic model slightly winning out overall. 
 
@@ -1320,7 +1321,7 @@ No real signs of overfitting, that's good!
 
 ## LDA
 
-The next model we will attempt to run is Linear Discriminant Analysis (LDA). LDA can be helpful with this dataset after our preprocessing steps, turning the response variable into a binary variable as well as removing quite a few less-important variables. LDA can also be useful due to the fact that is looks at the mean differences between damage categories and the covariance matrix of the predictors to maximize separation between the two classes. It's also slightly more interpretable than an ElasticNet Logistic Regression model. However, LDA does come with a large caveat; it requires that predictors within each class follow a roughly normal distribution and share similar enough covariance matrices. We hope that our feature selection helps adhere to this assumption. 
+The next model we will attempt to run is Linear Discriminant Analysis (LDA). LDA may be helpful with this dataset after we've completed our preprocessing steps, turned the response variable into a binary variable, and removed quite a few less-important variables. LDA can also be useful due to the fact that is looks at the mean differences between damage categories and the covariance matrix of the predictors to maximize separation between the two classes. It's also slightly more interpretable than an ElasticNet Logistic Regression model. However, LDA does come with a large caveat; it requires that predictors within each class follow a roughly normal distribution and share similar enough covariance matrices. We hope that our feature selection helps adhere to this assumption. 
 
 ```{r LDA}
 library(discrim)
@@ -1366,11 +1367,11 @@ lda_train_metrics |>
   knitr::kable(digits = 4)
 ```
 
-The LDA model has a balanced accuracy of 0.6928, and a roc AUC of 0.8295, which is quite a bit worse than our logistic model attempts. It is worse in all measures.
+The LDA model has a balanced accuracy of 0.6928, and a roc AUC of 0.8295. It clearly performs worse than our logistic model attempts based on  metrics above.
 
 ## QDA
 
-We then turn to QDA for similar reasons as LDA. QDA is appropriate for this dataset after our preprocessing steps, including converting the response variable into a binary classification problem and reducing the number of predictors through feature selection. Unlike LDA, QDA does not assume that both damage categories share the same covariance matrix; instead, it allows each class to have its own covariance structure. This added flexibility may improve model performance, as the relationships between structural and geographic characteristics may differ among buildings experiencing different levels of earthquake damage. 
+We then turn to QDA for similar reasons as LDA. QDA is appropriate for this dataset after we've completed our preprocessing steps, turned the response variable into a binary variable, and removed quite a few less-important variables. Unlike LDA, QDA does not assume that both damage categories share the same covariance matrix; instead, it allows each class to have its own covariance structure. This added flexibility may improve model performance, as the relationships between structural and geographic characteristics may differ among buildings experiencing different levels of earthquake damage. 
 
 By incorporating class-specific covariance matrices, QDA can capture more complex decision boundaries than LDA, potentially improving classification performance when the two damage categories are not well separated by a linear boundary. While QDA is somewhat less simple than LDA due to its quadratic decision boundary, it still provides useful insight into how predictor variables contribute to distinguishing between damage categories.
 
@@ -1407,13 +1408,13 @@ qda_train_metrics|>
   knitr::kable(digits = 4)
 ```
 
-QDA (with PCA assistance) performed a bit better than LDA. This makes sense as QDA typically has more relaxed assumptions than LDA. Chiefly that each class has it's own covariance matrix. That being said, it looks like our data, even with the reduced features, didn't match the model assumptions for LDA or QDA well enough. Chiefly, we have a lot of binary variables in our data, which breaks the Gaussian assumption for LDA and QDA. Those binary variables are, remember, bernoulli, not gaussian. 
+QDA (with PCA assistance) performed a bit better than LDA. This makes sense as QDA typically has more relaxed assumptions than LDA, chiefly that each class has it's own covariance matrix. That being said, it looks like our data, even with the reduced features, didn't match the model assumptions for LDA or QDA well enough. Notably, we have a lot of binary variables in our data, which violates the Gaussian assumption for LDA and QDA. Those binary variables are, remember, Bernoulli, not Gaussian. 
 
 ## Random Forest Model with Bagging
 
-Now we will do a random forest model using ensemble methods, not for the purpose of feature selection, but for the purpose of modeling for real. 
+Next we proceed with a random forest model using ensemble methods, not for the purpose of feature selection, but for the purpose of modeling for real. 
 
-Random Forest models are exceptionally flexible non-parametric models that can easily capture nonlinear relationships and interaction effects. Our data contains just that, quite a bit of complex interaction effects and non-linear relationships. These variables may not be able to be captured by linear classification models such as ElasticNet Logistic Regression, LDA, and QDA models. Random Forest also doesn't require any additional assumptions like the first three either. The bagging process can also reduce the variance by training many decision trees on different bootstrap samples of the data and then combining their predictions through majority voting for classification, which can help prevent overfitting and noisy variance. Random forest, however, does suffer from a lack of interpretability if the resulting tree is large and complex, but that can be resolved with calculating feature importance.
+Random Forest models are exceptionally flexible non-parametric models that can easily capture nonlinear relationships and interaction effects. Our data contains just that, quite a bit of complex interaction effects and non-linear relationships. These variables may not be able to be captured by linear classification models such as ElasticNet Logistic Regression, LDA, and QDA models. Random Forest also doesn't require any additional assumptions. The bagging process can also reduce the variance by training many decision trees on different bootstrap samples of the data and then combining their predictions through majority voting for classification, which can help prevent overfitting and noisy variance. Random forest, however, does suffer from a lack of interpretability if the resulting tree is large and complex, but that can be resolved with calculating feature importance.
 
 ```{r random forest}
 library(tidymodels)
@@ -1550,7 +1551,7 @@ rf_train_metrics|>
 
 ```
 
-Random Forest performed better than the other models, having both the highest ROC AUC, F-measure, and Kappa metrics. However, the difference between the training and testing ROC AUC suggests some potential overfitting with the model performing better on the tra
+Random Forest performed better than the other models, having both the highest ROC AUC, F-measure, and Kappa metrics. However, the difference between the training and testing ROC AUC suggests  potential overfitting with the model performing better on the trainging data than the testing data.
 
 ## XGBoost
 
@@ -1655,11 +1656,13 @@ xgb_train_metrics|>
 
 ### Summary
 
-- XGBoost performed very well on this dataset ie, after tuning the number of trees, tree depth, and learning rate, the model achieved a test ROC AUC of 0.9046, making it one of the best-performing models. 
+- XGBoost performed very well on this dataset i.e., after tuning the number of trees, tree depth, and learning rate, the model achieved a test ROC AUC of 0.9046, making it one of the best-performing models. 
 - Its balanced accuracy 0.6696 and Kappa 0.4247 were also similar to the Random Forest model
 - The training and testing metrics were close, which I think means only a small amount of overfitting
 - Overall, XGBoost was a strong model, but its performance was nearly identical to Random Forest.
 
+
+# Phase \# 8 Model Summary
 ## Consolidated Model Metrics
 
 Below we show the consolidated metrics across the models for both the reduced test and training sets. 
@@ -1711,9 +1714,8 @@ roc_summary_overlay, aes(x = 1 - specificity, y = sensitivity, color = model_nam
 
 ```
 
-# Phase \# 8 Model Summary
 
-Although QDA achieved the highest balanced accuracy score of 0.7469, this study cares the most about accurately identifying buildings that will sustain damage. The random forest classifier achieved one of the highest sensitivities (the majority class was damaged buildings) of 0.9797, indicating its amazing ability to find damage buildings. It also contains the highest F1 score (0.9571), ROC-AUC (0.9062), and kappa (0.4372). Therefore, the champion model here is the **random forest model**. 
+Although QDA achieved the highest balanced accuracy score of 0.7469, this study cares the most about accurately identifying buildings that will sustain damage. The random forest classifier achieved one of the highest sensitivities (the majority class was damaged buildings) of 0.9797, indicating its amazing ability to find damaged buildings. It also contains the highest F1 score (0.9571), ROC-AUC (0.9062), and kappa (0.4372). Therefore, the champion model here is the **random forest model**. 
 
 The following provides more information about the champion model, Random Forest:
 
@@ -1824,7 +1826,7 @@ p4 <- plot(age_profile) +
 p0 + p1 + p2 + p3 + p4
 ```
 
-Note, I had to use DALEXtra to make partial dependence plots due to the use of tidyverse workflows. It provides the explain_tidymodels() function that would create an object that we can then use the random forest ranger output to create those partial dependence plots. Source for helping us understand a complex predictive RF model: https://arxiv.org/abs/1806.08915
+Note, I had to use DALEXtra to make partial dependence plots due to the use of tidyverse workflows. It provides the explain_tidymodels() function, which creates an object that we can then use the random forest ranger output to create those partial dependence plots. Source for helping us understand a complex predictive RF model: https://arxiv.org/abs/1806.08915
 
 This is what the partial dependence plots show us:
 - Foundation Type: buildings with foundation type 'r' have the highest predicted probability of damage, while h has the smallest.
