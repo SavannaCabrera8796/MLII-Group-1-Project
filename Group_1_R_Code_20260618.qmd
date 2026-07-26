@@ -567,9 +567,9 @@ labs(
 
 After performing EDA and considering different model approaches, we've decided to restructure this into a binary classification problem which classifies whether or not there would be damage rather than which of three damage grades to expect. We've grouped levels 2 and 3 of damage_grade together as this simplifies our classification problem in an appropriate manner given the ordinal nature of our classes. We determined it would be most important to predict simply whether there would be damage, instead of whether that damage was moderate to high, as understanding buildings which are at risk for damage is the key.
 
-- **damaged:** Yes for damage_grade=1 (minimal)
+- **damaged:** Yes for damage_grade=2,3 (medium damage to complete destruction)
 
-- **damaged**: No for damage_grade=2,3 (moderate to high)
+- **damaged**: No for damage_grade=1 (low damage)
 
 Below we see the new predictor and its distribution and still must strongly plan for class imbalance.
 
